@@ -3,6 +3,7 @@
 #include "processing/ImageProcessor.h"
 #include "ui/TranslationLabel.h"
 #include "utils/LanguageManager.h"
+#include "ui/CaptureOverlay.h"
 #include <QPushButton>
 #include <QTimer>
 #include <QDebug>
@@ -19,7 +20,8 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     sourceModel(new QStringListModel(this)),
     sourceProxy(new QSortFilterProxyModel(this)),
     targetModel(new QStringListModel(this)),
-    targetProxy(new QSortFilterProxyModel(this))
+    targetProxy(new QSortFilterProxyModel(this)),
+    captureOverlay(nullptr)
 {
     ui.setupUi(this);
 
@@ -43,6 +45,7 @@ LiveTranslator::LiveTranslator(QWidget *parent)
 LiveTranslator::~LiveTranslator()
 {
     delete languageManager;
+    delete captureOverlay;
 }
 
 void LiveTranslator::startCapture()
@@ -79,6 +82,14 @@ void LiveTranslator::processCapturedImage(ScreenGrabber* grabber)
         captureRect = grabber->getCaptureRect();
         captureScreen = grabber->getAssociatedScreen();
 
+        if (!captureOverlay) {
+            captureOverlay = new CaptureOverlay(captureScreen, captureRect, this);
+        }
+        else {
+            captureOverlay->updateGeometry(captureRect);
+            captureOverlay->show();
+        }
+
         ImageProcessor::processImage(captured);
         
         // First translation
@@ -103,7 +114,12 @@ void LiveTranslator::updateTranslation()
 
     QString text = ImageProcessor::recognizeText(img, ocrCode.toStdString().c_str());
 
-    qDebug() << "Recognized text: " + text;
+    qDebug() << "Recognized text: " + text; 
+
+    if (captureOverlay)
+    {
+        captureOverlay->updateGeometry(captureRect);
+    }
 }
 
 void LiveTranslator::filterSourceLanguages(const QString& filter)

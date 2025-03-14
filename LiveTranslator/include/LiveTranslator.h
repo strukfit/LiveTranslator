@@ -10,6 +10,7 @@ class TranslationLabel;
 class LanguageManager;
 class QStringListModel;
 class QSortFilterProxyModel;
+class CaptureOverlay;
 
 class LiveTranslator : public QMainWindow
 {
@@ -35,6 +36,7 @@ private:
     QRect captureRect;
     QScreen* captureScreen;
     LanguageManager* languageManager;
+    CaptureOverlay* captureOverlay;
 
     QStringListModel* sourceModel;
     QSortFilterProxyModel* sourceProxy;
