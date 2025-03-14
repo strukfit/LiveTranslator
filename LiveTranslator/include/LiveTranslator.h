@@ -1,9 +1,15 @@
 #pragma once
 
 #include <QtWidgets/QMainWindow>
-#include <opencv2/opencv.hpp>
 #include <windows.h>
 #include "ui_LiveTranslator.h"
+
+class QTimer;
+class QScreen;
+class TranslationLabel;
+class LanguageManager;
+class QStringListModel;
+class QSortFilterProxyModel;
 
 class LiveTranslator : public QMainWindow
 {
@@ -16,8 +22,22 @@ public:
 private slots:
     void startCapture();
     void processCapturedImage(class ScreenGrabber* grabber);
+    void updateTranslation();
+    void filterSourceLanguages(const QString& filter);
+    void filterTargetLanguages(const QString& filter);
 
 private:
-    Ui::LiveTranslatorClass ui;
+    void setupLanguagesProxyModels();
 
+    Ui::LiveTranslatorClass ui;
+    QTimer* updateTimer;
+    TranslationLabel* translationLabel;
+    QRect captureRect;
+    QScreen* captureScreen;
+    LanguageManager* languageManager;
+
+    QStringListModel* sourceModel;
+    QSortFilterProxyModel* sourceProxy;
+    QStringListModel* targetModel;
+    QSortFilterProxyModel* targetProxy;
 };

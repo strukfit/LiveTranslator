@@ -1,19 +1,25 @@
 #include "processing/ImageProcessor.h"
-
+#include <opencv2/opencv.hpp>
+#include <tesseract/baseapi.h>
+#include <QDebug>
 
 cv::Mat ImageProcessor::qimageToMat(const QImage& image)
 {
-	 cv::Mat img = cv::Mat(image.height(), image.width(), CV_8UC4, 
+	if (image.isNull()) return cv::Mat();
+
+	cv::Mat img = cv::Mat(image.height(), image.width(), CV_8UC4, 
 		 const_cast<uchar*>(image.bits()), image.bytesPerLine()).clone();
 
 	 // Convert from BGRA to BGR
-	 cv::cvtColor(img, img, cv::COLOR_BGRA2BGR);
+	cv::cvtColor(img, img, cv::COLOR_BGRA2BGR);
 
-	 return img;
+	return img;
 }
 
 void ImageProcessor::processImage(cv::Mat& img)
 {
+	if (img.empty()) return;
+
 	cv::cvtColor(img, img, cv::COLOR_BGR2GRAY); // Gray color
 
 	cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
@@ -23,4 +29,27 @@ void ImageProcessor::processImage(cv::Mat& img)
 
 	//cv::threshold(img, img, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU); // Binarization
 	cv::adaptiveThreshold(img, img, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, 15, 5); // Binarization
+}
+
+QString ImageProcessor::recognizeText(const cv::Mat& img, const char* lang)
+{
+	if (img.empty()) return QString();
+
+	tesseract::TessBaseAPI* ocr = new tesseract::TessBaseAPI();
+	const char* tessdataPath = "resources/tessdata";
+	int initResult = ocr->Init(tessdataPath, lang);
+
+	if (initResult != 0)
+	{
+		qWarning() << "Tesseract initialization failed with code:" << initResult << "for language:" << lang;
+		delete ocr;
+		return QString();
+	}
+
+	ocr->SetImage(img.data, img.cols, img.rows, 3, img.step);
+	QString text = QString::fromUtf8(ocr->GetUTF8Text());
+	ocr->End();
+	delete ocr;
+
+	return text;
 }

@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 project(LiveTranslator LANGUAGES CXX)
 
-SET(AUTOMOC ON)
-SET(AUTOUIC ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
 
 # Enable hot reloading for MSVC compilers, if supported.
 if (POLICY CMP0141)
@@ -21,7 +22,7 @@ set(VCPKG_INCLUDE_DIR "$ENV{VCPKG_HOME}/installed/${VCPKG_TARGET_TRIPLET}/includ
 set(VCPKG_LIBRARY_DIR "$ENV{VCPKG_HOME}/installed/${VCPKG_TARGET_TRIPLET}/lib")
 set(VCPKG_BIN_DIR "$ENV{VCPKG_HOME}/installed/${VCPKG_TARGET_TRIPLET}/bin")
 
-file(GLOB_RECURSE PROJECT_SOURCES "src/*.cpp"  "include/*.h")
+file(GLOB_RECURSE PROJECT_SOURCES "src/*.cpp"  "include/*.h" "include/ui/*.ui" "resources/*.qrc")
 
 include(qt.cmake)
 
@@ -40,9 +41,14 @@ qt_standard_project_setup()
 qt_add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})
 
 find_package(OpenCV REQUIRED)
+find_package(Tesseract CONFIG REQUIRED)
 
 if(NOT OpenCV_FOUND)
     message(FATAL_ERROR "OpenCV not found.")
+endif()
+
+if(NOT Tesseract_FOUND)
+    message(FATAL_ERROR "Tesseract not found.")
 endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE 
@@ -61,8 +67,12 @@ set_target_properties(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
         ${OpenCV_LIBS}
+        Tesseract::libtesseract
         Qt::Core
         Qt::Gui
         Qt::Widgets
 )
 
+set(RESOURCES_DIR ${CMAKE_SOURCE_DIR}/${PROJECT_NAME}/resources/tessdata)
+set(DESTINATION_DIR ${CMAKE_BINARY_DIR}/${PROJECT_NAME}/resources)
+file(COPY ${RESOURCES_DIR} DESTINATION ${DESTINATION_DIR})

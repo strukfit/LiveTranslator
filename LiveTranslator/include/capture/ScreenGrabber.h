@@ -2,10 +2,12 @@
 #define SCREENGRABBER_H
 
 #include <QDialog>
-#include <QWidget>
 #include <QRubberBand>
-#include <QMouseEvent>
 #include <opencv2/core/mat.hpp>
+
+class QWidget;
+class QMouseEvent;
+class QScreen;
 
 class ScreenGrabber : public QDialog {
     Q_OBJECT
@@ -15,8 +17,10 @@ public:
     ~ScreenGrabber();
 
     cv::Mat getCapturedImage() const { return capturedImage; }
-    QRect getCapturectRect() const { return rubberBand ? rubberBand->geometry() : QRect(); }
+    QRect getCaptureRect() const { return rubberBand ? rubberBand->geometry() : QRect(); }
+    QScreen* getAssociatedScreen() const { return associatedScreen; }
     static QList<ScreenGrabber*> createForAllScreens(QWidget* parent);
+    static cv::Mat captureArea(QScreen* screen, const QRect& rect);
 
 signals:
     void captureCompleted();

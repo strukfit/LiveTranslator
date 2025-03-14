@@ -1,6 +1,8 @@
 #include "capture/ScreenGrabber.h"
 #include "processing/ImageProcessor.h"
 #include <QScreen>
+#include <QWidget>
+#include <QMouseEvent>
 #include <QGuiApplication>
 #include <QApplication>
 
@@ -33,6 +35,27 @@ QList<ScreenGrabber*> ScreenGrabber::createForAllScreens(QWidget* parent)
     }
 
     return grabbers;
+}
+
+cv::Mat ScreenGrabber::captureArea(QScreen* screen, const QRect& rect)
+{
+    if (!screen || rect.isEmpty()) {
+        return cv::Mat();
+    }
+
+    // Capture the screen area
+    QPixmap screenshot = screen->grabWindow(0,
+        rect.x(),
+        rect.y(),
+        rect.width(),
+        rect.height()
+    );
+
+    // Convert QPixmap to QImage
+    QImage image = screenshot.toImage();
+
+    // Convert QImage to cv::Mat
+    return ImageProcessor::qimageToMat(image);
 }
 
 void ScreenGrabber::mousePressEvent(QMouseEvent* event) {
@@ -76,19 +99,7 @@ void ScreenGrabber::captureScreen() {
     if (!associatedScreen) return;
 
     // Get the coordinates of the selected area
-    QRect geometry = rubberBand->geometry();
+    QRect area = rubberBand->geometry();
 
-    // Capture the screen area
-    QPixmap screenshot = associatedScreen->grabWindow(0,
-        geometry.x(),
-        geometry.y(),
-        geometry.width(),
-        geometry.height()
-    );
-
-    // Convert QPixmap to QImage
-    QImage image = screenshot.toImage();
-
-    // Convert QImage to cv::Mat
-    capturedImage = ImageProcessor::qimageToMat(image);
+    capturedImage = captureArea(associatedScreen, area);
 }
