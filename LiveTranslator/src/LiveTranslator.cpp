@@ -4,7 +4,9 @@
 #include "ui/TranslationLabel.h"
 #include "utils/LanguageManager.h"
 #include "ui/CaptureOverlay.h"
+#include "workers/OcrWorker.h"
 #include <QPushButton>
+#include <QThread>
 #include <QTimer>
 #include <QDebug>
 #include <QStringListModel>
@@ -109,17 +111,30 @@ void LiveTranslator::updateTranslation()
 
     cv::Mat img = ScreenGrabber::captureArea(captureScreen, captureRect);
 
-    QString sourceLangName = ui.sourceLanguageComboBox->currentText();
-    QString ocrCode = languageManager->getOcrCode(sourceLangName);
-
-    QString text = ImageProcessor::recognizeText(img, ocrCode.toStdString().c_str());
-
-    qDebug() << "Recognized text: " + text; 
-
     if (captureOverlay)
     {
         captureOverlay->updateGeometry(captureRect);
     }
+
+    QString sourceLangName = ui.sourceLanguageComboBox->currentText();
+    QString ocrCode = languageManager->getOcrCode(sourceLangName);
+
+    //QString text = ImageProcessor::recognizeText(img, ocrCode.toStdString().c_str());
+    //qDebug() << "Recognized text: " + text; 
+
+    QThread* thread = new QThread();
+    OcrWorker* worker = new OcrWorker(img, ocrCode);
+    worker->moveToThread(thread);
+
+    connect(thread, &QThread::started, worker, &OcrWorker::process);
+    connect(worker, &OcrWorker::finished, this, [this, thread, worker](QString text) {
+        qDebug() << "Recognized text: " + text;
+        
+        thread->quit();
+        thread->deleteLater();
+        worker->deleteLater();
+    });
+    thread->start();
 }
 
 void LiveTranslator::filterSourceLanguages(const QString& filter)
