@@ -13,6 +13,11 @@ public:
     LiveTranslator(QWidget *parent = nullptr);
     ~LiveTranslator();
 
+private slots:
+    void startCapture();
+    void processCapturedImage(class ScreenGrabber* grabber);
+
 private:
     Ui::LiveTranslatorClass ui;
+
 };

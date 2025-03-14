@@ -5,7 +5,7 @@
 #include <QWidget>
 #include <QRubberBand>
 #include <QMouseEvent>
-#include <opencv2/opencv.hpp>
+#include <opencv2/core/mat.hpp>
 
 class ScreenGrabber : public QDialog {
     Q_OBJECT
@@ -15,6 +15,7 @@ public:
     ~ScreenGrabber();
 
     cv::Mat getCapturedImage() const { return capturedImage; }
+    QRect getCapturectRect() const { return rubberBand ? rubberBand->geometry() : QRect(); }
     static QList<ScreenGrabber*> createForAllScreens(QWidget* parent);
 
 signals:

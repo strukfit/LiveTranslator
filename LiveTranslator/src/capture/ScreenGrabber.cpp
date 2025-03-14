@@ -1,4 +1,5 @@
-#include "ScreenGrabber.h"
+#include "capture/ScreenGrabber.h"
+#include "processing/ImageProcessor.h"
 #include <QScreen>
 #include <QGuiApplication>
 #include <QApplication>
@@ -13,7 +14,6 @@ ScreenGrabber::ScreenGrabber(QScreen* screen, QWidget* parent)
     setStyleSheet("background: black;");
     setWindowOpacity(0.7);
     setMouseTracking(true);
-
     setGeometry(screen->geometry());
 }
 
@@ -90,9 +90,5 @@ void ScreenGrabber::captureScreen() {
     QImage image = screenshot.toImage();
 
     // Convert QImage to cv::Mat
-    capturedImage = cv::Mat(image.height(), image.width(), CV_8UC4,
-        image.bits(), image.bytesPerLine()).clone();
-
-    // Convert from BGRA to BGR
-    cv::cvtColor(capturedImage, capturedImage, cv::COLOR_BGRA2BGR);
+    capturedImage = ImageProcessor::qimageToMat(image);
 }
