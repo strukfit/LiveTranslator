@@ -11,11 +11,12 @@
 #include <QDebug>
 #include <QStringListModel>
 #include <QSortFilterProxyModel>
+#include <QCloseEvent>
 
 LiveTranslator::LiveTranslator(QWidget *parent)
     : QMainWindow(parent),
     updateTimer(new QTimer(this)),
-    translationLabel(new TranslationLabel(this)),
+    translationLabel(new TranslationLabel(nullptr)),
     captureRect(QRect()),
     captureScreen(nullptr),
     languageManager(new LanguageManager(":/resources/languages.json")),
@@ -23,9 +24,21 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     sourceProxy(new QSortFilterProxyModel(this)),
     targetModel(new QStringListModel(this)),
     targetProxy(new QSortFilterProxyModel(this)),
-    captureOverlay(nullptr)
+    captureOverlay(nullptr),
+    trayIcon(new QSystemTrayIcon(this)),
+    trayMenu(new QMenu(this))
 {
     ui.setupUi(this);
+
+    trayIcon->setIcon(/*QIcon(":/icons/app_icon.png")*/QIcon::fromTheme("dialog-information"));
+    trayIcon->setToolTip("Live Translator");
+    trayIcon->show();
+
+    QAction* showAction = new QAction("Show", this);
+    QAction* quitAction = new QAction("Quit", this);
+    trayMenu->addAction(showAction);
+    trayMenu->addAction(quitAction);
+    trayIcon->setContextMenu(trayMenu);
 
     QStringList languages = languageManager->getLanguagesDisplayNames();
     sourceModel->setStringList(languages);
@@ -37,17 +50,63 @@ LiveTranslator::LiveTranslator(QWidget *parent)
 
     ui.targetLanguageComboBox->setCurrentText("English");
 
+    connect(trayIcon, &QSystemTrayIcon::activated, this, &LiveTranslator::trayIconActivated);
+    connect(showAction, &QAction::triggered, this, &LiveTranslator::showWindow);
+    connect(quitAction, &QAction::triggered, this, &LiveTranslator::quitApplication);
+
     connect(ui.sourceSearchEdit, &QLineEdit::textChanged, this, &LiveTranslator::filterSourceLanguages);
     connect(ui.targetSearchEdit, &QLineEdit::textChanged, this, &LiveTranslator::filterTargetLanguages);
-
+    
     connect(updateTimer, &QTimer::timeout, this, &LiveTranslator::updateTranslation);
     connect(ui.captureButton, &QPushButton::clicked, this, &LiveTranslator::startCapture);
 }
 
 LiveTranslator::~LiveTranslator()
 {
+    if (updateTimer) 
+    {
+        updateTimer->stop();
+    }
+
+    if (captureOverlay)
+    {
+        captureOverlay->close();
+        captureOverlay->deleteLater();
+        captureOverlay = nullptr;
+    }
+
+    if (translationLabel)
+    {
+        translationLabel->close();
+        translationLabel->deleteLater();
+        translationLabel = nullptr;
+    }
+
+    trayIcon->deleteLater();
+    trayMenu->deleteLater();
+
     delete languageManager;
-    delete captureOverlay;
+}
+
+void LiveTranslator::closeEvent(QCloseEvent* event)
+{
+    if (trayIcon->isVisible())
+    {
+        qDebug() << "hide window";
+        hide();
+        event->ignore();
+        trayIcon->showMessage(
+            "Live Translator",
+            "Application minimized to tray. Right-click the tray icon to restore or quit.",
+            QSystemTrayIcon::Information, 
+            3000
+        );
+    }
+    else
+    {
+        event->accept();
+        QApplication::quit();
+    }
 }
 
 void LiveTranslator::startCapture()
@@ -84,21 +143,23 @@ void LiveTranslator::processCapturedImage(ScreenGrabber* grabber)
         captureRect = grabber->getCaptureRect();
         captureScreen = grabber->getAssociatedScreen();
 
-        if (!captureOverlay) {
-            captureOverlay = new CaptureOverlay(captureScreen, captureRect, this);
+        if (!captureOverlay) 
+        {
+            captureOverlay = new CaptureOverlay(captureScreen, captureRect, nullptr);
         }
-        else {
+        else 
+        {
             captureOverlay->updateGeometry(captureRect);
             captureOverlay->show();
         }
+
+        QRect screenRect = captureRect.translated(captureScreen->geometry().topLeft());
+        translationLabel->setGeometry(screenRect);
 
         ImageProcessor::processImage(captured);
         
         // First translation
         updateTranslation();
-
-        translationLabel->setGeometry(captureRect);
-        translationLabel->show();
 
         // Start the timer to refresh every 2 seconds
         updateTimer->start(2000);
@@ -109,7 +170,10 @@ void LiveTranslator::updateTranslation()
 {
     if (!captureScreen || captureRect.isEmpty()) return;
 
+    translationLabel->hide();
     cv::Mat img = ScreenGrabber::captureArea(captureScreen, captureRect);
+    ImageProcessor::processImage(img);
+    translationLabel->show();
 
     if (captureOverlay)
     {
@@ -119,9 +183,6 @@ void LiveTranslator::updateTranslation()
     QString sourceLangName = ui.sourceLanguageComboBox->currentText();
     QString ocrCode = languageManager->getOcrCode(sourceLangName);
 
-    //QString text = ImageProcessor::recognizeText(img, ocrCode.toStdString().c_str());
-    //qDebug() << "Recognized text: " + text; 
-
     QThread* thread = new QThread();
     OcrWorker* worker = new OcrWorker(img, ocrCode);
     worker->moveToThread(thread);
@@ -129,7 +190,7 @@ void LiveTranslator::updateTranslation()
     connect(thread, &QThread::started, worker, &OcrWorker::process);
     connect(worker, &OcrWorker::finished, this, [this, thread, worker](QString text) {
         qDebug() << "Recognized text: " + text;
-        
+        translateText(text);
         thread->quit();
         thread->deleteLater();
         worker->deleteLater();
@@ -140,7 +201,8 @@ void LiveTranslator::updateTranslation()
 void LiveTranslator::filterSourceLanguages(const QString& filter)
 {
     sourceProxy->setFilterWildcard(filter + '*'); // Filter with partial match support
-    if (ui.sourceLanguageComboBox->currentIndex() == -1 && sourceProxy->rowCount() > 0) {
+    if (ui.sourceLanguageComboBox->currentIndex() == -1 && sourceProxy->rowCount() > 0) 
+    {
         ui.sourceLanguageComboBox->setCurrentIndex(0);
     }
 }
@@ -148,9 +210,39 @@ void LiveTranslator::filterSourceLanguages(const QString& filter)
 void LiveTranslator::filterTargetLanguages(const QString& filter)
 {
     targetProxy->setFilterWildcard(filter + "*"); // Filter with partial match support
-    if (ui.targetLanguageComboBox->currentIndex() == -1 && targetProxy->rowCount() > 0) {
+    if (ui.targetLanguageComboBox->currentIndex() == -1 && targetProxy->rowCount() > 0) 
+    {
         ui.targetLanguageComboBox->setCurrentIndex(0);
     }
+}
+
+void LiveTranslator::translateText(const QString& text)
+{
+    translationLabel->setGeometry(captureRect.translated(captureScreen->geometry().topLeft()));
+    translationLabel->setText(text);
+    translationLabel->adjustSize();
+    translationLabel->show();
+}
+
+void LiveTranslator::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
+{
+    if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick)
+    {
+        showWindow();
+    }
+}
+
+void LiveTranslator::showWindow()
+{
+    show();
+    raise();
+    activateWindow();
+}
+
+void LiveTranslator::quitApplication()
+{
+    trayIcon->hide();
+    QApplication::quit();
 }
 
 void LiveTranslator::setupLanguagesProxyModels()

@@ -3,9 +3,8 @@
 
 #include <QWidget>
 #include <QScreen>
-#include <QDialog>
 
-class CaptureOverlay : public QDialog {
+class CaptureOverlay : public QWidget {
     Q_OBJECT
 
 public:

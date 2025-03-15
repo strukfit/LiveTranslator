@@ -14,7 +14,7 @@
    <string>TranslationLabel</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">background: rgba(255, 255, 255, 200); color: black; font-size: 16px;</string>
+   <string notr="true">background: rgba(255, 255, 255, 200); color: white; font-size: 16px;</string>
   </property>
   <property name="alignment">
    <set>Qt::AlignmentFlag::AlignCenter</set>

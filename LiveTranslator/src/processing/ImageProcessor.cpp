@@ -20,15 +20,20 @@ void ImageProcessor::processImage(cv::Mat& img)
 {
 	if (img.empty()) return;
 
-	cv::cvtColor(img, img, cv::COLOR_BGR2GRAY); // Gray color
+	// Gray color
+	cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
 
 	cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
 	clahe->setClipLimit(2.0);
 	clahe->setTilesGridSize(cv::Size(8, 8));
 	clahe->apply(img, img);
 
-	//cv::threshold(img, img, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU); // Binarization
-	cv::adaptiveThreshold(img, img, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, 15, 5); // Binarization
+	// Binarization 
+	cv::threshold(img, img, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+	//cv::adaptiveThreshold(img, img, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, 15, 5);
+
+	// Invert image
+	cv::bitwise_not(img, img);
 }
 
 QString ImageProcessor::recognizeText(const cv::Mat& img, const char* lang)
@@ -46,7 +51,7 @@ QString ImageProcessor::recognizeText(const cv::Mat& img, const char* lang)
 		return QString();
 	}
 
-	ocr->SetImage(img.data, img.cols, img.rows, 3, img.step);
+	ocr->SetImage(img.data, img.cols, img.rows, 1, img.step);
 	QString text = QString::fromUtf8(ocr->GetUTF8Text());
 	ocr->End();
 	delete ocr;
