@@ -50,12 +50,12 @@ LiveTranslator::LiveTranslator(QWidget *parent)
 
     connect(
         ui.sourceLanguageComboBox, &QComboBox::currentIndexChanged,
-        this, [this](const QString& text) { m_settings->setSourceLanguage(text); }
+        this, [this](int index) { m_settings->setSourceLanguage(this->ui.sourceLanguageComboBox->currentText()); }
     );
 
     connect(
         ui.targetLanguageComboBox, &QComboBox::currentIndexChanged,
-        this, [this](const QString& text) { m_settings->setTargetLanguage(text); }
+        this, [this](int index) { m_settings->setTargetLanguage(this->ui.targetLanguageComboBox->currentText()); }
     );
 
     setupTranslatorComboBox();
@@ -264,6 +264,8 @@ void LiveTranslator::updateTranslator(int index)
 
     TranslationApi::Type type = static_cast<TranslationApi::Type>(ui.translatorComboBox->itemData(index).toInt());
     m_translator = TranslatorFactory::createTranslator(type, this, m_settings->getApiKey(type));
+
+    m_settings->setTranslatorType(type);
 }
 
 void LiveTranslator::setupLanguagesProxyModels()
