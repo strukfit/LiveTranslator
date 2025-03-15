@@ -7,6 +7,7 @@
 #include "workers/OcrWorker.h"
 #include "translators/Translator.h"
 #include "translators/TranslatorFactory.h"
+#include "utils/Settings.h"
 #include <QPushButton>
 #include <QThread>
 #include <QTimer>
@@ -29,7 +30,8 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     m_captureOverlay(nullptr),
     m_trayIcon(new QSystemTrayIcon(this)),
     m_trayMenu(new QMenu(this)),
-    m_translator(nullptr)
+    m_translator(nullptr),
+    m_settings(new Settings(this))
 {
     ui.setupUi(this);
 
@@ -43,7 +45,18 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     ui.sourceLanguageComboBox->setModel(m_sourceProxy);
     ui.targetLanguageComboBox->setModel(m_targetProxy);
 
-    ui.targetLanguageComboBox->setCurrentText("English");
+    ui.sourceLanguageComboBox->setCurrentText(m_settings->getSourceLanguage());
+    ui.targetLanguageComboBox->setCurrentText(m_settings->getTargetLanguage());
+
+    connect(
+        ui.sourceLanguageComboBox, &QComboBox::currentIndexChanged,
+        this, [this](const QString& text) { m_settings->setSourceLanguage(text); }
+    );
+
+    connect(
+        ui.targetLanguageComboBox, &QComboBox::currentIndexChanged,
+        this, [this](const QString& text) { m_settings->setTargetLanguage(text); }
+    );
 
     setupTranslatorComboBox();
     updateTranslator(ui.translatorComboBox->currentIndex());
@@ -250,7 +263,7 @@ void LiveTranslator::updateTranslator(int index)
     }
 
     TranslationApi::Type type = static_cast<TranslationApi::Type>(ui.translatorComboBox->itemData(index).toInt());
-    m_translator = TranslatorFactory::createTranslator(type, this, "api_key");
+    m_translator = TranslatorFactory::createTranslator(type, this, m_settings->getApiKey(type));
 }
 
 void LiveTranslator::setupLanguagesProxyModels()
@@ -282,12 +295,11 @@ void LiveTranslator::setupTrayMenu()
 
 void LiveTranslator::setupTranslatorComboBox()
 {
-    for (const TranslationApi& api : TranslationApi::allValues())
+    for (const TranslationApi::Type type : TranslationApi::allValues())
     {
-        ui.translatorComboBox->addItem(api.toString(), static_cast<int>(api.type()));
+        ui.translatorComboBox->addItem(TranslationApi::toString(type), static_cast<int>(type));
     }
-    // TODO : set translator from settings class
-    //ui.translatorComboBox->setCurrentIndex(static_cast<int>(m_settings->getApiType()))
+    ui.translatorComboBox->setCurrentIndex(static_cast<int>(m_settings->getTranslatorType()));
 
     connect(
         ui.translatorComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),

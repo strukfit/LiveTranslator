@@ -1,18 +1,29 @@
 #include "utils/TranslationApi.h"
 
-QString TranslationApi::toString() const {
-    switch (m_type) {
-    case Type::GoogleTranslate: return "Google Translate";
-    case Type::DeepLTranslate: return "DeepL Translate";
-    case Type::LibreTranslate: return "Libre Translate";
+QString TranslationApi::toString(Type type) {
+#define ENUM_VALUE(name, string, service) case Type::name: return string;
+    switch (type)
+    {
+        ENUM_API_TYPES
+    default: return "Unknown API";
     }
-    return "Unknown API";
+#undef ENUM_VALUE
 }
 
-QList<TranslationApi> TranslationApi::allValues() {
-    return {
-        TranslationApi(Type::GoogleTranslate),
-        TranslationApi(Type::DeepLTranslate),
-        TranslationApi(Type::LibreTranslate)
-    };
+QString TranslationApi::serviceName(Type type)
+{
+#define ENUM_VALUE(name, string, service) case Type::name: return service;
+    switch (type)
+    {
+        ENUM_API_TYPES
+    default: return "Unknown API";
+    }
+#undef ENUM_VALUE
+}
+
+QList<TranslationApi::Type> TranslationApi::allValues() 
+{
+#define ENUM_VALUE(name, string, service) Type::name,
+    return { ENUM_API_TYPES };
+#undef ENUM_VALUE
 }

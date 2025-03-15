@@ -13,6 +13,7 @@ class QStringListModel;
 class QSortFilterProxyModel;
 class CaptureOverlay;
 class Translator;
+class Settings;
 
 class LiveTranslator : public QMainWindow
 {
@@ -56,4 +57,5 @@ private:
     LanguageManager* m_languageManager;
     CaptureOverlay* m_captureOverlay;
     Translator* m_translator;
+    Settings* m_settings;
 };
