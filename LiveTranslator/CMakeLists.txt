@@ -35,6 +35,7 @@ find_package(Qt${QT_VERSION_MAJOR}
         Core
         Gui
         Widgets
+        Network
 )
 qt_standard_project_setup()
 
@@ -71,6 +72,7 @@ target_link_libraries(${PROJECT_NAME}
         Qt::Core
         Qt::Gui
         Qt::Widgets
+        Qt::Network
 )
 
 set(RESOURCES_DIR ${CMAKE_SOURCE_DIR}/${PROJECT_NAME}/resources/tessdata)

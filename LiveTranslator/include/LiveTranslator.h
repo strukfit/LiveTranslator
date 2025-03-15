@@ -12,6 +12,7 @@ class LanguageManager;
 class QStringListModel;
 class QSortFilterProxyModel;
 class CaptureOverlay;
+class Translator;
 
 class LiveTranslator : public QMainWindow
 {
@@ -34,23 +35,25 @@ private slots:
     void trayIconActivated(QSystemTrayIcon::ActivationReason reason);
     void showWindow();
     void quitApplication();
+    void updateTranslator(int index);
 
 private:
     void setupLanguagesProxyModels();
+    void setupTrayMenu();
+    void setupTranslatorComboBox();
 
     Ui::LiveTranslatorClass ui;
-    QTimer* updateTimer;
-    TranslationLabel* translationLabel;
-    QRect captureRect;
-    QScreen* captureScreen;
-    LanguageManager* languageManager;
-    CaptureOverlay* captureOverlay;
-
-    QStringListModel* sourceModel;
-    QSortFilterProxyModel* sourceProxy;
-    QStringListModel* targetModel;
-    QSortFilterProxyModel* targetProxy;
-
-    QSystemTrayIcon* trayIcon;
-    QMenu* trayMenu;
+    QTimer* m_updateTimer;
+    QRect m_captureRect;
+    QScreen* m_captureScreen;
+    QStringListModel* m_sourceModel;
+    QSortFilterProxyModel* m_sourceProxy;
+    QStringListModel* m_targetModel;
+    QSortFilterProxyModel* m_targetProxy;
+    QSystemTrayIcon* m_trayIcon;
+    TranslationLabel* m_translationLabel;
+    QMenu* m_trayMenu;
+    LanguageManager* m_languageManager;
+    CaptureOverlay* m_captureOverlay;
+    Translator* m_translator;
 };
