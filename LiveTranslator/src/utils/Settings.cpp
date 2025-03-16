@@ -19,14 +19,14 @@ Settings::~Settings()
 	saveSettings();
 }
 
-QString Settings::getApiKey(TranslationApi::Type type) const
+QString Settings::getApiKey(TranslationApi::Type apiType) const
 {
-	QString service = TranslationApi::serviceName(type);
+	QString service = TranslationApi::serviceName(apiType);
 	QString envVar = service.toUpper() + "_API_KEY";
 	QString apiKey = qgetenv(envVar.toUtf8());
-	if (!apiKey.isEmpty()) {
-		return apiKey;
-	}
+	
+	if (!apiKey.isEmpty()) return apiKey;
+	if (m_apiKeys.contains(apiType)) return m_apiKeys[apiType];
 
 	QFile file(m_configPath);
 	if (file.open(QIODevice::ReadOnly))
@@ -86,6 +86,12 @@ void Settings::saveSettings() const
 	json["target_language"] = m_targetLanguage;
 	json["translator_type"] = static_cast<int>(m_translatorType);
 
+	for (auto it = m_apiKeys.constBegin(); it != m_apiKeys.constEnd(); ++it)
+	{
+		QString service = TranslationApi::serviceName(it.key());
+		json[service + "_api_key"] = it.value();
+	}
+
 	// Save existing API keys, if any
 	QFile readFile(m_configPath);
 	if (readFile.open(QIODevice::ReadOnly)) {
@@ -115,6 +121,18 @@ void Settings::loadSettings()
 		m_translatorType = static_cast<TranslationApi::Type>(
 			json["translator_type"].toInt(static_cast<int>(TranslationApi::Type::GoogleTranslate))
 		);
+
+		// Load API-keys to m_apiKeys
+		for (const TranslationApi::Type type : TranslationApi::allValues())
+		{
+			QString service = TranslationApi::serviceName(type);
+			QString key = service + "_api_key";
+			if (json.contains(key))
+			{
+				m_apiKeys[type] = json[key].toString();
+			}
+		}
+
 		qDebug() << "Settings loaded from" << m_configPath;
 	}
 }

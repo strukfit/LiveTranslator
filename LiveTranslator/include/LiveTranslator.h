@@ -32,11 +32,12 @@ private slots:
     void updateTranslation();
     void filterSourceLanguages(const QString& filter);
     void filterTargetLanguages(const QString& filter);
-    void translateText(const QString& text);
+    void translateText(const QString& text, const QString& sourceLang, const QString& targetLang);
     void trayIconActivated(QSystemTrayIcon::ActivationReason reason);
     void showWindow();
     void quitApplication();
     void updateTranslator(int index);
+    void updateTranslationLabel(const QString& text);
 
 private:
     void setupLanguagesProxyModels();

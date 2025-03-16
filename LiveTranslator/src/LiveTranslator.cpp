@@ -68,6 +68,9 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     
     connect(m_updateTimer, &QTimer::timeout, this, &LiveTranslator::updateTranslation);
     connect(ui.captureButton, &QPushButton::clicked, this, &LiveTranslator::startCapture);
+
+    connect(m_translator, &Translator::translationFinished, this, &LiveTranslator::updateTranslationLabel);
+    connect(m_translator, &Translator::translationError, this, [&](const QString& error) { updateTranslationLabel("Error: " + error); });
 }
 
 LiveTranslator::~LiveTranslator()
@@ -190,16 +193,20 @@ void LiveTranslator::updateTranslation()
     }
 
     QString sourceLangName = ui.sourceLanguageComboBox->currentText();
+    QString targetLangName = ui.targetLanguageComboBox->currentText();
     QString ocrCode = m_languageManager->getOcrCode(sourceLangName);
 
     QThread* thread = new QThread();
     OcrWorker* worker = new OcrWorker(img, ocrCode);
     worker->moveToThread(thread);
 
+    QString sourceLang = m_languageManager->getApiCode(sourceLangName);
+    QString targetLang = m_languageManager->getApiCode(targetLangName);
+
     connect(thread, &QThread::started, worker, &OcrWorker::process);
-    connect(worker, &OcrWorker::finished, this, [this, thread, worker](QString text) {
+    connect(worker, &OcrWorker::finished, this, [this, thread, worker, sourceLang, targetLang](QString text) {
         qDebug() << "Recognized text: " + text;
-        translateText(text);
+        translateText(text, sourceLang, targetLang);
         thread->quit();
         thread->deleteLater();
         worker->deleteLater();
@@ -225,12 +232,11 @@ void LiveTranslator::filterTargetLanguages(const QString& filter)
     }
 }
 
-void LiveTranslator::translateText(const QString& text)
+void LiveTranslator::translateText(const QString& text, const QString& sourceLang, const QString& targetLang)
 {
-    m_translationLabel->setGeometry(m_captureRect.translated(m_captureScreen->geometry().topLeft()));
-    m_translationLabel->setText(text);
-    m_translationLabel->adjustSize();
-    m_translationLabel->show();
+    if (!m_translator) return;
+
+    m_translator->translate(text, sourceLang, targetLang);
 }
 
 void LiveTranslator::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
@@ -263,9 +269,19 @@ void LiveTranslator::updateTranslator(int index)
     }
 
     TranslationApi::Type type = static_cast<TranslationApi::Type>(ui.translatorComboBox->itemData(index).toInt());
+    qDebug() << m_settings->getApiKey(type);
     m_translator = TranslatorFactory::createTranslator(type, this, m_settings->getApiKey(type));
 
     m_settings->setTranslatorType(type);
+}
+
+void LiveTranslator::updateTranslationLabel(const QString& text)
+{
+    qDebug() << "Translated text: " + text;
+    m_translationLabel->setGeometry(m_captureRect.translated(m_captureScreen->geometry().topLeft()));
+    m_translationLabel->setText(text);
+    m_translationLabel->adjustSize();
+    m_translationLabel->show();
 }
 
 void LiveTranslator::setupLanguagesProxyModels()

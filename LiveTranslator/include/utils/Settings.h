@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QMap>
 #include <utils/TranslationApi.h>
 
 class Settings : public QObject {
@@ -18,7 +19,7 @@ public:
     QString getTargetLanguage() const;
     void setTargetLanguage(const QString& language);
     TranslationApi::Type getTranslatorType() const;
-    void setTranslatorType(TranslationApi::Type type);
+    void setTranslatorType(TranslationApi::Type apiType);
 
     void saveSettings() const;
     void loadSettings();
@@ -28,6 +29,7 @@ private:
     QString m_sourceLanguage;
     QString m_targetLanguage;
     TranslationApi::Type m_translatorType;
+    QMap<TranslationApi::Type, QString> m_apiKeys;
 };
 
 #endif
