@@ -123,6 +123,8 @@ void LiveTranslator::closeEvent(QCloseEvent* event)
 
 void LiveTranslator::startCapture()
 {
+    if (!m_ocrTasks.isEmpty()) stopCapture();
+
     QList<ScreenGrabber*> grabbers = ScreenGrabber::createForAllScreens(this);
 
     auto deleteAllGrabbers = [=]() {
@@ -207,10 +209,14 @@ void LiveTranslator::updateTranslation()
     connect(worker, &OcrWorker::finished, this, [this, thread, worker, sourceLang, targetLang](QString text) {
         qDebug() << "Recognized text: " + text;
         translateText(text, sourceLang, targetLang);
-        thread->quit();
-        thread->deleteLater();
-        worker->deleteLater();
+        m_ocrTasks.removeAll({ thread, worker });
     });
+    connect(worker, &OcrWorker::finished, thread, &QThread::quit);
+    connect(worker, &OcrWorker::finished, worker, &QObject::deleteLater);
+    connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+
+    m_ocrTasks.append({ thread, worker });
+
     thread->start();
 }
 
@@ -279,6 +285,8 @@ void LiveTranslator::updateTranslationLabel(const QString& text)
 {
     qDebug() << "Translated text: " + text;
     m_translationLabel->setGeometry(m_captureRect.translated(m_captureScreen->geometry().topLeft()));
+    m_translationLabel->setMaximumWidth(m_captureRect.width());
+    m_translationLabel->setMaximumHeight(m_captureRect.height());
     m_translationLabel->setText(text);
     m_translationLabel->adjustSize();
     m_translationLabel->show();
@@ -323,4 +331,23 @@ void LiveTranslator::setupTranslatorComboBox()
         ui.translatorComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
         this, &LiveTranslator::updateTranslator
     );
+}
+
+void LiveTranslator::stopOcrWorkers()
+{
+    for (auto& [thread, worker] : m_ocrTasks)
+    {
+        worker->stop();
+        thread->quit();
+    }
+    m_ocrTasks.clear();
+}
+
+void LiveTranslator::stopCapture()
+{
+    m_updateTimer->stop();
+    m_translationLabel->hide();
+    m_captureOverlay->hide();
+
+    stopOcrWorkers();
 }

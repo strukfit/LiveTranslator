@@ -14,6 +14,7 @@ class QSortFilterProxyModel;
 class CaptureOverlay;
 class Translator;
 class Settings;
+class OcrWorker;
 
 class LiveTranslator : public QMainWindow
 {
@@ -43,6 +44,8 @@ private:
     void setupLanguagesProxyModels();
     void setupTrayMenu();
     void setupTranslatorComboBox();
+    void stopOcrWorkers();
+    void stopCapture();
 
     Ui::LiveTranslatorClass ui;
     QTimer* m_updateTimer;
@@ -59,4 +62,6 @@ private:
     CaptureOverlay* m_captureOverlay;
     Translator* m_translator;
     Settings* m_settings;
+
+    QList<QPair<QThread*, OcrWorker*>> m_ocrTasks;
 };

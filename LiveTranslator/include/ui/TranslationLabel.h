@@ -13,6 +13,8 @@ public:
 	TranslationLabel(QWidget *parent = nullptr);
 	~TranslationLabel();
 
+	void setText(const QString& text);
+
 protected:
 	void mousePressEvent(QMouseEvent* event) override;
 	void mouseMoveEvent(QMouseEvent* event) override;
@@ -20,4 +22,5 @@ protected:
 
 private:
 	Ui::TranslationLabelClass ui;
+	int m_padding;
 };
