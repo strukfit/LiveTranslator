@@ -1,0 +1,3 @@
+[submodule "LiveTranslator/extern/QHotkey"]
+	path = LiveTranslator/extern/QHotkey
+	url = https://github.com/Skycoder42/QHotkey.git

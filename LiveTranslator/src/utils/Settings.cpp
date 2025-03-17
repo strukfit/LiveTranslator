@@ -6,7 +6,7 @@
 
 Settings::Settings(QObject* parent)
 	: QObject(parent),
-	m_configPath(QDir::homePath() + "/.livetranslator/config.json"),
+	m_settings(QDir::homePath() + "/.livetranslator/settings.ini", QSettings::IniFormat),
 	m_sourceLanguage("eng"),
 	m_targetLanguage("ru"),
 	m_translatorType(TranslationApi::Type::GoogleTranslate)
@@ -19,6 +19,16 @@ Settings::~Settings()
 	saveSettings();
 }
 
+void Settings::saveValue(const QString& key, const QVariant& value)
+{
+	m_settings.setValue(key, value);
+}
+
+QVariant Settings::loadValue(const QString& key, const QVariant& defaultValue) const
+{
+	return m_settings.value(key, defaultValue);
+}
+
 QString Settings::getApiKey(TranslationApi::Type apiType) const
 {
 	QString service = TranslationApi::serviceName(apiType);
@@ -28,12 +38,10 @@ QString Settings::getApiKey(TranslationApi::Type apiType) const
 	if (!apiKey.isEmpty()) return apiKey;
 	if (m_apiKeys.contains(apiType)) return m_apiKeys[apiType];
 
-	QFile file(m_configPath);
-	if (file.open(QIODevice::ReadOnly))
-	{
-		QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-		apiKey = doc.object()[service + "_api_key"].toString();
-		if (!apiKey.isEmpty()) return apiKey;
+	apiKey = m_settings.value(service + "_api_key", "").toString();
+	if (!apiKey.isEmpty()) {
+		m_apiKeys[apiType] = apiKey;
+		return apiKey;
 	}
 
 	qWarning() << "API Key for" << service << "not found!";
@@ -48,6 +56,7 @@ QString Settings::getSourceLanguage() const
 void Settings::setSourceLanguage(const QString& language)
 {
 	m_sourceLanguage = language;
+	m_settings.setValue("source_language", m_sourceLanguage);
 }
 
 QString Settings::getTargetLanguage() const
@@ -58,6 +67,7 @@ QString Settings::getTargetLanguage() const
 void Settings::setTargetLanguage(const QString& language)
 {
 	m_targetLanguage = language;
+	m_settings.setValue("target_language", m_targetLanguage);
 }
 
 TranslationApi::Type Settings::getTranslatorType() const
@@ -68,71 +78,42 @@ TranslationApi::Type Settings::getTranslatorType() const
 void Settings::setTranslatorType(TranslationApi::Type type)
 {
 	m_translatorType = type;
+	m_settings.setValue("translator_type", static_cast<int>(m_translatorType));
 }
 
-void Settings::saveSettings() const
+void Settings::saveSettings()
 {
-	QDir configDir(QDir::homePath() + "/.livetranslator/");
-	if (!configDir.exists()) configDir.mkpath(".");
-
-	QFile file(m_configPath);
-	if (!file.open(QIODevice::WriteOnly))
-	{
-		qWarning() << "Failed to save settings to" << m_configPath;
-	}
-
-	QJsonObject json;
-	json["source_language"] = m_sourceLanguage;
-	json["target_language"] = m_targetLanguage;
-	json["translator_type"] = static_cast<int>(m_translatorType);
-
+	m_settings.setValue("source_language", m_sourceLanguage);
+	m_settings.setValue("target_language", m_targetLanguage);
+	m_settings.setValue("translator_type", static_cast<int>(m_translatorType));
 	for (auto it = m_apiKeys.constBegin(); it != m_apiKeys.constEnd(); ++it)
 	{
 		QString service = TranslationApi::serviceName(it.key());
-		json[service + "_api_key"] = it.value();
+		m_settings.setValue(service + "_api_key", it.value());
 	}
-
-	// Save existing API keys, if any
-	QFile readFile(m_configPath);
-	if (readFile.open(QIODevice::ReadOnly)) {
-		QJsonDocument existingDoc = QJsonDocument::fromJson(readFile.readAll());
-		QJsonObject existingJson = existingDoc.object();
-		for (const QString& key : existingJson.keys()) {
-			if (key.endsWith("_api_key")) {
-				json[key] = existingJson[key];
-			}
-		}
-	}
-
-	file.write(QJsonDocument(json).toJson());
-	file.close();
-	qDebug() << "Settings saved to" << m_configPath;
 }
 
 void Settings::loadSettings()
 {
-	QFile file(m_configPath);
-	if (file.open(QIODevice::ReadOnly))
+	QDir dir(QDir::homePath() + "/.livetranslator");
+	if (!dir.exists()) {
+		dir.mkpath(".");
+	}
+
+	m_sourceLanguage = m_settings.value("source_language", "eng").toString();
+	m_targetLanguage = m_settings.value("target_language", "ru").toString();
+	m_translatorType = static_cast<TranslationApi::Type>(
+		m_settings.value("translator_type", static_cast<int>(TranslationApi::Type::GoogleTranslate)).toInt()
+	);
+
+	for (const TranslationApi::Type type : TranslationApi::allValues()) 
 	{
-		QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-		QJsonObject json = doc.object();
-		m_sourceLanguage = json["source_language"].toString("eng");
-		m_targetLanguage = json["target_language"].toString("ru");
-		m_translatorType = static_cast<TranslationApi::Type>(
-			json["translator_type"].toInt(static_cast<int>(TranslationApi::Type::GoogleTranslate))
-		);
+		QString service = TranslationApi::serviceName(type);
+		QString key = service + "_api_key";
+		QString value = m_settings.value(key, "").toString();
 
-		// Load API-keys to m_apiKeys
-		for (const TranslationApi::Type type : TranslationApi::allValues())
-		{
-			QString service = TranslationApi::serviceName(type);
-			QString key = service + "_api_key";
-			if (json.contains(key))
-			{
-				m_apiKeys[type] = json[key].toString();
-			}
+		if (!value.isEmpty()) {
+			m_apiKeys[type] = value;
 		}
-
-		qDebug() << "Settings loaded from" << m_configPath;
 	}
 }

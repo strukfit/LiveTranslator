@@ -8,7 +8,9 @@
 #include "translators/Translator.h"
 #include "translators/TranslatorFactory.h"
 #include "utils/Settings.h"
+#include "utils/HotkeyManager.h"
 #include <QPushButton>
+#include <QMenu>
 #include <QThread>
 #include <QTimer>
 #include <QDebug>
@@ -31,9 +33,11 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     m_trayIcon(new QSystemTrayIcon(this)),
     m_trayMenu(new QMenu(this)),
     m_translator(nullptr),
-    m_settings(new Settings(this))
+    m_settings(new Settings(this)),
+    m_hotkeyManager(new HotkeyManager(m_settings, this))
 {
     ui.setupUi(this);
+    setAttribute(Qt::WA_ShowWithoutActivating);
 
     m_translationCache.setMaxCost(1000);
 
@@ -71,6 +75,9 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     connect(m_updateTimer, &QTimer::timeout, this, &LiveTranslator::updateTranslation);
     connect(ui.captureButton, &QPushButton::clicked, this, &LiveTranslator::startCapture);
     connect(ui.stopButton, &QPushButton::clicked, this, &LiveTranslator::stopCapture);
+
+    connect(m_translator, &Translator::translationError, this, [&](const QString& error) { updateTranslationLabel("Error: " + error); });
+    connect(m_hotkeyManager, &HotkeyManager::hotkeyTriggered, this, &LiveTranslator::onHotkeyTriggered);
 }
 
 LiveTranslator::~LiveTranslator()
@@ -96,6 +103,9 @@ LiveTranslator::~LiveTranslator()
 
     m_trayIcon->deleteLater();
     m_trayMenu->deleteLater();
+
+    if (m_hotkeyManager) delete m_hotkeyManager;
+    if (m_settings) m_settings->deleteLater();
 
     delete m_languageManager;
 }
@@ -260,12 +270,6 @@ void LiveTranslator::translateText(const QString& text, const QString& sourceLan
         }, Qt::SingleShotConnection
     );
 
-    connect(
-        m_translator, &Translator::translationError, 
-        this, [&](const QString& error) { updateTranslationLabel("Error: " + error); }, 
-        Qt::SingleShotConnection
-    );
-
     m_translator->translate(text, sourceLang, targetLang);
 }
 
@@ -314,6 +318,21 @@ void LiveTranslator::updateTranslationLabel(const QString& text)
     m_translationLabel->setText(text);
     m_translationLabel->adjustSize();
     m_translationLabel->show();
+}
+
+void LiveTranslator::onHotkeyTriggered(HotkeyActions::Action action)
+{
+    qDebug() << HotkeyActions::toString(action) << " hotkey triggered";
+    switch (action)
+    {
+    case HotkeyActions::Action::Capture:
+        startCapture();
+        break;
+    case HotkeyActions::Action::Stop:
+        stopCapture();
+        break;
+    default: break;
+    }
 }
 
 void LiveTranslator::setupLanguagesProxyModels()
@@ -369,9 +388,9 @@ void LiveTranslator::stopOcrWorkers()
 
 void LiveTranslator::stopCapture()
 {
-    m_updateTimer->stop();
-    m_translationLabel->hide();
-    m_captureOverlay->hide();
+    if (m_updateTimer && m_updateTimer->isActive()) m_updateTimer->stop();
+    if (m_translationLabel) m_translationLabel->hide();
+    if (m_captureOverlay) m_captureOverlay->hide();
 
     stopOcrWorkers();
 }

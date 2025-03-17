@@ -3,8 +3,8 @@
 #include <QtWidgets/QMainWindow>
 #include <QSystemTrayIcon>
 #include <QCache>
-#include <windows.h>
 #include "ui_LiveTranslator.h"
+#include "utils/HotkeyActions.h"
 
 class QTimer;
 class QScreen;
@@ -16,6 +16,7 @@ class CaptureOverlay;
 class Translator;
 class Settings;
 class OcrWorker;
+class HotkeyManager;
 
 class LiveTranslator : public QMainWindow
 {
@@ -41,6 +42,7 @@ private slots:
     void quitApplication();
     void updateTranslator(int index);
     void updateTranslationLabel(const QString& text);
+    void onHotkeyTriggered(HotkeyActions::Action action);
 
 private:
     void setupLanguagesProxyModels();
@@ -63,6 +65,7 @@ private:
     CaptureOverlay* m_captureOverlay;
     Translator* m_translator;
     Settings* m_settings;
+    HotkeyManager* m_hotkeyManager;
 
     QList<QPair<QThread*, OcrWorker*>> m_ocrTasks;
     QCache<QString, QString> m_translationCache;

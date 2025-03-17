@@ -39,6 +39,8 @@ find_package(Qt${QT_VERSION_MAJOR}
 )
 qt_standard_project_setup()
 
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/extern/QHotkey)
+
 qt_add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})
 
 find_package(OpenCV REQUIRED)
@@ -73,6 +75,7 @@ target_link_libraries(${PROJECT_NAME}
         Qt::Gui
         Qt::Widgets
         Qt::Network
+        QHotkey::QHotkey
 )
 
 set(RESOURCES_DIR ${CMAKE_SOURCE_DIR}/${PROJECT_NAME}/resources/tessdata)

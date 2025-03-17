@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QMap>
+#include <QSettings>
 #include <utils/TranslationApi.h>
 
 class Settings : public QObject {
@@ -12,8 +13,10 @@ public:
     explicit Settings(QObject* parent = nullptr);
     ~Settings() override;
 
-    QString getApiKey(TranslationApi::Type type) const;
+    void saveValue(const QString& key, const QVariant& value);
+    QVariant loadValue(const QString& key, const QVariant& defaultValue = QVariant()) const;
 
+    QString getApiKey(TranslationApi::Type type) const;
     QString getSourceLanguage() const;
     void setSourceLanguage(const QString& language);
     QString getTargetLanguage() const;
@@ -21,11 +24,11 @@ public:
     TranslationApi::Type getTranslatorType() const;
     void setTranslatorType(TranslationApi::Type apiType);
 
-    void saveSettings() const;
+    void saveSettings();
     void loadSettings();
 
 private:
-    QString m_configPath;
+    QSettings m_settings;
     QString m_sourceLanguage;
     QString m_targetLanguage;
     TranslationApi::Type m_translatorType;
