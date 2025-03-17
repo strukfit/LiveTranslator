@@ -17,6 +17,7 @@ class Translator;
 class Settings;
 class OcrWorker;
 class HotkeyManager;
+class QProgressDialog;
 
 class LiveTranslator : public QMainWindow
 {
@@ -43,6 +44,7 @@ private slots:
     void updateTranslator(int index);
     void updateTranslationLabel(const QString& text);
     void onHotkeyTriggered(HotkeyActions::Action action);
+    void showDownloadProgress(const QString& langCode);
 
 private:
     void setupLanguagesProxyModels();
@@ -66,6 +68,7 @@ private:
     Translator* m_translator;
     Settings* m_settings;
     HotkeyManager* m_hotkeyManager;
+    QProgressDialog* m_downloadProgress;
 
     QList<QPair<QThread*, OcrWorker*>> m_ocrTasks;
     QCache<QString, QString> m_translationCache;

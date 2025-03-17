@@ -36,12 +36,11 @@ void ImageProcessor::processImage(cv::Mat& img)
 	cv::bitwise_not(img, img);
 }
 
-QString ImageProcessor::recognizeText(const cv::Mat& img, const char* lang)
+QString ImageProcessor::recognizeText(const char* tessdataPath, const cv::Mat& img, const char* lang)
 {
 	if (img.empty()) return QString();
 
 	tesseract::TessBaseAPI* ocr = new tesseract::TessBaseAPI();
-	const char* tessdataPath = "resources/tessdata";
 	int initResult = ocr->Init(tessdataPath, lang);
 
 	if (initResult != 0)

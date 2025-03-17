@@ -17,6 +17,9 @@
 #include <QStringListModel>
 #include <QSortFilterProxyModel>
 #include <QCloseEvent>
+#include <QProgressDialog>
+#include <QMessageBox>
+#include <QProgressDialog>
 
 LiveTranslator::LiveTranslator(QWidget *parent)
     : QMainWindow(parent),
@@ -34,7 +37,8 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     m_trayMenu(new QMenu(this)),
     m_translator(nullptr),
     m_settings(new Settings(this)),
-    m_hotkeyManager(new HotkeyManager(m_settings, this))
+    m_hotkeyManager(new HotkeyManager(m_settings, this)),
+    m_downloadProgress(nullptr)
 {
     ui.setupUi(this);
     setAttribute(Qt::WA_ShowWithoutActivating);
@@ -78,6 +82,8 @@ LiveTranslator::LiveTranslator(QWidget *parent)
 
     connect(m_translator, &Translator::translationError, this, [&](const QString& error) { updateTranslationLabel("Error: " + error); });
     connect(m_hotkeyManager, &HotkeyManager::hotkeyTriggered, this, &LiveTranslator::onHotkeyTriggered);
+
+    connect(m_languageManager, &LanguageManager::languageDownloadStarted, this, &LiveTranslator::showDownloadProgress);
 }
 
 LiveTranslator::~LiveTranslator()
@@ -208,26 +214,34 @@ void LiveTranslator::updateTranslation()
     QString targetLangName = ui.targetLanguageComboBox->currentText();
     QString ocrCode = m_languageManager->getOcrCode(sourceLangName);
 
-    QThread* thread = new QThread();
-    OcrWorker* worker = new OcrWorker(img, ocrCode);
-    worker->moveToThread(thread);
+    m_languageManager->ensureLanguageAvailible(ocrCode, [this, img, ocrCode, sourceLangName, targetLangName](bool success) {
+        if (!success)
+        {
+            QMessageBox::warning(this, "Language Error", "Failed to download language pack for " + sourceLangName);
+            return;
+        }
 
-    QString sourceLang = m_languageManager->getApiCode(sourceLangName);
-    QString targetLang = m_languageManager->getApiCode(targetLangName);
+        QThread* thread = new QThread();
+        OcrWorker* worker = new OcrWorker(m_languageManager->getTessdataPath(), img, ocrCode);
+        worker->moveToThread(thread);
 
-    connect(thread, &QThread::started, worker, &OcrWorker::process);
-    connect(worker, &OcrWorker::finished, this, [this, thread, worker, sourceLang, targetLang](QString text) {
-        qDebug() << "Recognized text: " + text;
-        translateText(text, sourceLang, targetLang);
-        m_ocrTasks.removeAll({ thread, worker });
+        QString sourceLang = m_languageManager->getApiCode(sourceLangName);
+        QString targetLang = m_languageManager->getApiCode(targetLangName);
+
+        connect(thread, &QThread::started, worker, &OcrWorker::process);
+        connect(worker, &OcrWorker::finished, this, [this, thread, worker, sourceLang, targetLang](QString text) {
+            qDebug() << "Recognized text: " + text;
+            translateText(text, sourceLang, targetLang);
+            m_ocrTasks.removeAll({ thread, worker });
+        });
+        connect(worker, &OcrWorker::finished, thread, &QThread::quit);
+        connect(worker, &OcrWorker::finished, worker, &QObject::deleteLater);
+        connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+
+        m_ocrTasks.append({ thread, worker });
+
+        thread->start();
     });
-    connect(worker, &OcrWorker::finished, thread, &QThread::quit);
-    connect(worker, &OcrWorker::finished, worker, &QObject::deleteLater);
-    connect(thread, &QThread::finished, thread, &QObject::deleteLater);
-
-    m_ocrTasks.append({ thread, worker });
-
-    thread->start();
 }
 
 void LiveTranslator::filterSourceLanguages(const QString& filter)
@@ -333,6 +347,30 @@ void LiveTranslator::onHotkeyTriggered(HotkeyActions::Action action)
         break;
     default: break;
     }
+}
+
+void LiveTranslator::showDownloadProgress(const QString& langCode)
+{
+    QString langDisplayName = m_languageManager->getDisplayNameByOcrCode(langCode);
+    if (!m_downloadProgress) {
+        m_downloadProgress = new QProgressDialog("Downloading language pack: " + langDisplayName, "Cancel", 0, 0, this);
+        m_downloadProgress->setWindowModality(Qt::WindowModal);
+        m_downloadProgress->setAutoClose(false);
+    }
+    m_downloadProgress->setLabelText("Downloading language pack: " + langDisplayName);
+    m_downloadProgress->show();
+
+    connect(
+        m_languageManager, &LanguageManager::languageDownloadFinished, 
+        this, [this, langCode, langDisplayName](const QString& downloadedCode, bool success) {
+            if (downloadedCode == langCode) {
+                m_downloadProgress->hide();
+                if (!success) {
+                    QMessageBox::warning(this, "Download Failed", "Could not download language pack for " + langDisplayName);
+                }
+            }
+        }, Qt::SingleShotConnection
+    );
 }
 
 void LiveTranslator::setupLanguagesProxyModels()

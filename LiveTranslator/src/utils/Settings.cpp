@@ -1,8 +1,5 @@
 #include "utils/Settings.h"
 #include <QDir>
-#include <QFile>
-#include <QJsonDocument>
-#include <QJsonObject>
 
 Settings::Settings(QObject* parent)
 	: QObject(parent),

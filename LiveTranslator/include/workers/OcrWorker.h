@@ -5,7 +5,7 @@
 class OcrWorker : public QObject {
     Q_OBJECT
 public:
-    OcrWorker(cv::Mat img, QString ocrCode);
+    OcrWorker(QString tessdataPath, cv::Mat img, QString ocrCode);
 
 signals:
     void finished(QString text);
@@ -15,7 +15,8 @@ public slots:
     void stop();
 
 private:
-    cv::Mat img;
-    QString ocrCode;
+    cv::Mat m_img;
+    QString m_ocrCode;
     bool m_stopRequested;
+    QString m_tessdataPath;
 };

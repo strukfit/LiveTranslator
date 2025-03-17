@@ -7,5 +7,5 @@ class ImageProcessor
 public:
 	static cv::Mat qimageToMat(const QImage& image);
 	static void processImage(cv::Mat& img);
-	static QString recognizeText(const cv::Mat& img, const char* lang);
+	static QString recognizeText(const char* tessdataPath, const cv::Mat& img, const char* lang);
 };
