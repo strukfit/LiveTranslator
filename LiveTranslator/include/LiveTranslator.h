@@ -2,6 +2,7 @@
 
 #include <QtWidgets/QMainWindow>
 #include <QSystemTrayIcon>
+#include <QCache>
 #include <windows.h>
 #include "ui_LiveTranslator.h"
 
@@ -64,4 +65,5 @@ private:
     Settings* m_settings;
 
     QList<QPair<QThread*, OcrWorker*>> m_ocrTasks;
+    QCache<QString, QString> m_translationCache;
 };

@@ -35,6 +35,8 @@ LiveTranslator::LiveTranslator(QWidget *parent)
 {
     ui.setupUi(this);
 
+    m_translationCache.setMaxCost(1000);
+
     setupTrayMenu();
 
     QStringList languages = m_languageManager->getLanguagesDisplayNames();
@@ -69,9 +71,6 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     connect(m_updateTimer, &QTimer::timeout, this, &LiveTranslator::updateTranslation);
     connect(ui.captureButton, &QPushButton::clicked, this, &LiveTranslator::startCapture);
     connect(ui.stopButton, &QPushButton::clicked, this, &LiveTranslator::stopCapture);
-
-    connect(m_translator, &Translator::translationFinished, this, &LiveTranslator::updateTranslationLabel);
-    connect(m_translator, &Translator::translationError, this, [&](const QString& error) { updateTranslationLabel("Error: " + error); });
 }
 
 LiveTranslator::~LiveTranslator()
@@ -242,6 +241,30 @@ void LiveTranslator::filterTargetLanguages(const QString& filter)
 void LiveTranslator::translateText(const QString& text, const QString& sourceLang, const QString& targetLang)
 {
     if (!m_translator) return;
+
+    QString cacheKey = QString("%1|%2|%3").arg(text, sourceLang, targetLang);
+
+    if (m_translationCache.contains(cacheKey))
+    {
+        QString* cachedResult = m_translationCache[cacheKey];
+        qDebug() << "Using cached translation for:" << text;
+        updateTranslationLabel(*cachedResult);
+        return;
+    }
+
+    connect(
+        m_translator, &Translator::translationFinished, 
+        this, [=](const QString& translated) {
+            updateTranslationLabel(translated);
+            m_translationCache.insert(cacheKey, new QString(translated));
+        }, Qt::SingleShotConnection
+    );
+
+    connect(
+        m_translator, &Translator::translationError, 
+        this, [&](const QString& error) { updateTranslationLabel("Error: " + error); }, 
+        Qt::SingleShotConnection
+    );
 
     m_translator->translate(text, sourceLang, targetLang);
 }
