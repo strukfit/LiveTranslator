@@ -68,6 +68,7 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     
     connect(m_updateTimer, &QTimer::timeout, this, &LiveTranslator::updateTranslation);
     connect(ui.captureButton, &QPushButton::clicked, this, &LiveTranslator::startCapture);
+    connect(ui.stopButton, &QPushButton::clicked, this, &LiveTranslator::stopCapture);
 
     connect(m_translator, &Translator::translationFinished, this, &LiveTranslator::updateTranslationLabel);
     connect(m_translator, &Translator::translationError, this, [&](const QString& error) { updateTranslationLabel("Error: " + error); });

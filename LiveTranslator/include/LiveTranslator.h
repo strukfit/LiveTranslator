@@ -29,6 +29,7 @@ protected:
 
 private slots:
     void startCapture();
+    void stopCapture();
     void processCapturedImage(class ScreenGrabber* grabber);
     void updateTranslation();
     void filterSourceLanguages(const QString& filter);
@@ -45,7 +46,6 @@ private:
     void setupTrayMenu();
     void setupTranslatorComboBox();
     void stopOcrWorkers();
-    void stopCapture();
 
     Ui::LiveTranslatorClass ui;
     QTimer* m_updateTimer;
