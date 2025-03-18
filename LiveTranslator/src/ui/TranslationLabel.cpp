@@ -20,7 +20,7 @@ TranslationLabel::TranslationLabel(QWidget *parent)
 	//setAlignment(Qt::AlignTop | Qt::AlignLeft);
 	setAlignment(Qt::AlignCenter);
 	setTextFormat(Qt::RichText);
-	
+
 	QFont font = this->font();
 	font.setPointSize(10);
 	setFont(font);

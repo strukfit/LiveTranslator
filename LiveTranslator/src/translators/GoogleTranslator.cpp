@@ -14,6 +14,12 @@ GoogleTranslator::GoogleTranslator(const QString& apiKey, QObject* parent)
 
 void GoogleTranslator::translate(const QString& text, const QString& sourceLang, const QString& targetLang)
 {
+	if (sourceLang == targetLang)
+	{
+		// TODO : error handling
+		return;
+	}
+
 	QUrl url(QString("https://translation.googleapis.com/language/translate/v2?key=%1").arg(m_apiKey));
 
 	QJsonObject json;

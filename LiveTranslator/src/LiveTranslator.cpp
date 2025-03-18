@@ -200,6 +200,7 @@ void LiveTranslator::processCapturedImage(ScreenGrabber* grabber)
         if (!m_captureOverlay)
         {
             m_captureOverlay = new CaptureOverlay(m_captureScreen, m_captureRect, nullptr);
+            m_translationLabel->setParent(m_captureOverlay);
             ScreenGrabber::ignore(m_captureOverlay);
         }
         else 
@@ -207,9 +208,6 @@ void LiveTranslator::processCapturedImage(ScreenGrabber* grabber)
             m_captureOverlay->updateGeometry(m_captureRect);
             m_captureOverlay->show();
         }
-
-        QRect screenRect = m_captureRect.translated(m_captureScreen->geometry().topLeft());
-        m_translationLabel->setGeometry(screenRect);
 
         ImageProcessor::processImage(captured);
         
@@ -297,7 +295,7 @@ void LiveTranslator::filterTargetLanguages(const QString& filter)
 
 void LiveTranslator::translateText(const QString& text, const QString& sourceLang, const QString& targetLang)
 {
-    if (!m_translator) return;
+    if (!m_translator || text.isEmpty()) return;
 
     QString cacheKey = QString("%1|%2|%3").arg(text, sourceLang, targetLang);
 
@@ -312,6 +310,7 @@ void LiveTranslator::translateText(const QString& text, const QString& sourceLan
     connect(
         m_translator, &Translator::translationFinished, 
         this, [=](const QString& translated) {
+            if (translated.isEmpty()) return;
             updateTranslationLabel(translated);
             m_translationCache.insert(cacheKey, new QString(translated));
         }, Qt::SingleShotConnection
@@ -358,12 +357,13 @@ void LiveTranslator::updateTranslator(int index)
 
 void LiveTranslator::updateTranslationLabel(const QString& text)
 {
+    if (text.isEmpty()) return;
+
     qDebug() << "Translated text: " + text;
     m_translationLabel->setGeometry(m_captureRect.translated(m_captureScreen->geometry().topLeft()));
     m_translationLabel->setMaximumWidth(m_captureRect.width());
     m_translationLabel->setMaximumHeight(m_captureRect.height());
     m_translationLabel->setText(text);
-    m_translationLabel->adjustSize();
     m_translationLabel->show();
 }
 
