@@ -19,6 +19,7 @@ public:
     cv::Mat getCapturedImage() const { return capturedImage; }
     QRect getCaptureRect() const { return rubberBand ? rubberBand->geometry() : QRect(); }
     QScreen* getAssociatedScreen() const { return associatedScreen; }
+    static void ignore(QWidget* widget);
     static QList<ScreenGrabber*> createForAllScreens(QWidget* parent);
     static cv::Mat captureArea(QScreen* screen, const QRect& rect);
 
@@ -40,6 +41,7 @@ private:
     QPoint origin;
     cv::Mat capturedImage;
     bool capturing;
+    static QList<QWidget*> m_ignoredWidgets;
 };
 
 #endif // SCREENGRABBER_H

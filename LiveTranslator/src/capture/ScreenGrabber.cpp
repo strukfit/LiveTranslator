@@ -6,6 +6,8 @@
 #include <QGuiApplication>
 #include <QApplication>
 
+QList<QWidget*> ScreenGrabber::m_ignoredWidgets;
+
 ScreenGrabber::ScreenGrabber(QScreen* screen, QWidget* parent)
     : QDialog(parent), 
     rubberBand(nullptr), 
@@ -21,6 +23,14 @@ ScreenGrabber::ScreenGrabber(QScreen* screen, QWidget* parent)
 
 ScreenGrabber::~ScreenGrabber() {
     delete rubberBand;
+}
+
+void ScreenGrabber::ignore(QWidget* widget)
+{
+    if (widget && !m_ignoredWidgets.contains(widget))
+    {
+        m_ignoredWidgets.append(widget);
+    }
 }
 
 QList<ScreenGrabber*> ScreenGrabber::createForAllScreens(QWidget* parent)
@@ -43,6 +53,16 @@ cv::Mat ScreenGrabber::captureArea(QScreen* screen, const QRect& rect)
         return cv::Mat();
     }
 
+    QList<QPair<QWidget*, bool>> visibilityStates;
+    for (QWidget* widget : m_ignoredWidgets)
+    {
+        if (widget)
+        {
+            visibilityStates.append({ widget, widget->isVisible() });
+            widget->hide();
+        }
+    }
+
     // Capture the screen area
     QPixmap screenshot = screen->grabWindow(0,
         rect.x(),
@@ -50,6 +70,15 @@ cv::Mat ScreenGrabber::captureArea(QScreen* screen, const QRect& rect)
         rect.width(),
         rect.height()
     );
+
+    for (const auto& [widget, wasVisible] : visibilityStates)
+    {
+        if (widget)
+        {
+            if (wasVisible) widget->show();
+            else widget->hide();
+        }
+    }
 
     // Convert QPixmap to QImage
     QImage image = screenshot.toImage();

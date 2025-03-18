@@ -74,6 +74,8 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     //ui.sourceLanguageComboBox->view()->setFocusProxy(ui.sourceSearchEdit);
     //ui.targetLanguageComboBox->view()->setFocusProxy(ui.targetSearchEdit);
 
+    ScreenGrabber::ignore(m_translationLabel);
+
     connect(
         ui.sourceLanguageComboBox, &QComboBox::currentIndexChanged,
         this, [this](int index) { 
@@ -198,6 +200,7 @@ void LiveTranslator::processCapturedImage(ScreenGrabber* grabber)
         if (!m_captureOverlay)
         {
             m_captureOverlay = new CaptureOverlay(m_captureScreen, m_captureRect, nullptr);
+            ScreenGrabber::ignore(m_captureOverlay);
         }
         else 
         {
@@ -222,10 +225,8 @@ void LiveTranslator::updateTranslation()
 {
     if (!m_captureScreen || m_captureRect.isEmpty()) return;
 
-    m_translationLabel->hide();
     cv::Mat img = ScreenGrabber::captureArea(m_captureScreen, m_captureRect);
     ImageProcessor::processImage(img);
-    m_translationLabel->show();
 
     if (m_captureOverlay)
     {
@@ -540,10 +541,8 @@ bool LiveTranslator::eventFilter(QObject* obj, QEvent* event)
     // Handle events in combo box views
     else if (obj == ui.sourceLanguageComboBox->view() || obj == ui.targetLanguageComboBox->view())
     {
-        qDebug() << "TEST 1111111111111111";
         if (event->type() == QEvent::KeyPress)
         {
-            qDebug() << "TEST 222222222222222";
             QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
             QLineEdit* targetEdit = (obj == ui.sourceLanguageComboBox->view()) ? ui.sourceSearchEdit : ui.targetSearchEdit;
             QComboBox* targetCombo = (obj == ui.sourceLanguageComboBox->view()) ? ui.sourceLanguageComboBox : ui.targetLanguageComboBox;
