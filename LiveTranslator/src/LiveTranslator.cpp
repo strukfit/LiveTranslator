@@ -20,6 +20,8 @@
 #include <QProgressDialog>
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QAbstractItemView>
+#include <QLineEdit>
 
 LiveTranslator::LiveTranslator(QWidget *parent)
     : QMainWindow(parent),
@@ -58,14 +60,34 @@ LiveTranslator::LiveTranslator(QWidget *parent)
     ui.sourceLanguageComboBox->setCurrentText(m_settings->getSourceLanguage());
     ui.targetLanguageComboBox->setCurrentText(m_settings->getTargetLanguage());
 
+    m_lastSourceText = ui.sourceLanguageComboBox->currentText();
+    m_lastTargetText = ui.targetLanguageComboBox->currentText();
+
+    ui.sourceSearchEdit->installEventFilter(this);
+    ui.targetSearchEdit->installEventFilter(this);
+    ui.sourceLanguageComboBox->installEventFilter(this);
+    ui.targetLanguageComboBox->installEventFilter(this);
+    ui.sourceLanguageComboBox->view()->installEventFilter(this);
+    ui.targetLanguageComboBox->view()->installEventFilter(this);
+    ui.sourceLanguageComboBox->view()->setFocusPolicy(Qt::NoFocus);
+    ui.targetLanguageComboBox->view()->setFocusPolicy(Qt::NoFocus);
+    //ui.sourceLanguageComboBox->view()->setFocusProxy(ui.sourceSearchEdit);
+    //ui.targetLanguageComboBox->view()->setFocusProxy(ui.targetSearchEdit);
+
     connect(
         ui.sourceLanguageComboBox, &QComboBox::currentIndexChanged,
-        this, [this](int index) { m_settings->setSourceLanguage(this->ui.sourceLanguageComboBox->currentText()); }
+        this, [this](int index) { 
+            m_settings->setSourceLanguage(this->ui.sourceLanguageComboBox->currentText());
+            swapLanguagesIfNeeded();
+        }
     );
 
     connect(
         ui.targetLanguageComboBox, &QComboBox::currentIndexChanged,
-        this, [this](int index) { m_settings->setTargetLanguage(this->ui.targetLanguageComboBox->currentText()); }
+        this, [this](int index) { 
+            m_settings->setTargetLanguage(this->ui.targetLanguageComboBox->currentText()); 
+            swapLanguagesIfNeeded();
+        }
     );
 
     setupTranslatorComboBox();
@@ -247,19 +269,29 @@ void LiveTranslator::updateTranslation()
 void LiveTranslator::filterSourceLanguages(const QString& filter)
 {
     m_sourceProxy->setFilterWildcard(filter + '*'); // Filter with partial match support
-    if (ui.sourceLanguageComboBox->currentIndex() == -1 && m_sourceProxy->rowCount() > 0)
+    /*if (ui.sourceLanguageComboBox->currentIndex() == -1 && m_sourceProxy->rowCount() > 0)
     {
         ui.sourceLanguageComboBox->setCurrentIndex(0);
+    }*/
+    if (!ui.sourceLanguageComboBox->view()->isVisible()) {
+        ui.sourceLanguageComboBox->showPopup();
+        ui.sourceSearchEdit->setFocus();
     }
+    ui.sourceSearchEdit->setFocus();
 }
 
 void LiveTranslator::filterTargetLanguages(const QString& filter)
 {
     m_targetProxy->setFilterWildcard(filter + "*"); // Filter with partial match support
-    if (ui.targetLanguageComboBox->currentIndex() == -1 && m_targetProxy->rowCount() > 0)
+    /*if (ui.targetLanguageComboBox->currentIndex() == -1 && m_targetProxy->rowCount() > 0)
     {
         ui.targetLanguageComboBox->setCurrentIndex(0);
+    }*/
+    if (!ui.targetLanguageComboBox->view()->isVisible()) {
+        ui.targetLanguageComboBox->showPopup();
+        ui.targetSearchEdit->setFocus();
     }
+    ui.targetSearchEdit->setFocus();
 }
 
 void LiveTranslator::translateText(const QString& text, const QString& sourceLang, const QString& targetLang)
@@ -424,6 +456,30 @@ void LiveTranslator::stopOcrWorkers()
     m_ocrTasks.clear();
 }
 
+void LiveTranslator::swapLanguagesIfNeeded()
+{
+    QString sourceText = ui.sourceLanguageComboBox->currentText();
+    QString targetText = ui.targetLanguageComboBox->currentText();
+
+    if (sourceText == targetText)
+    {
+        ui.sourceSearchEdit->clear();
+        ui.targetSearchEdit->clear();
+
+        ui.sourceLanguageComboBox->blockSignals(true);
+        ui.targetLanguageComboBox->blockSignals(true);
+
+        ui.sourceLanguageComboBox->setCurrentText(m_lastTargetText);
+        ui.targetLanguageComboBox->setCurrentText(m_lastSourceText);
+
+        ui.sourceLanguageComboBox->blockSignals(false);
+        ui.targetLanguageComboBox->blockSignals(false);
+    }
+
+    m_lastSourceText = ui.sourceLanguageComboBox->currentText();
+    m_lastTargetText = ui.targetLanguageComboBox->currentText();
+}
+
 void LiveTranslator::stopCapture()
 {
     if (m_updateTimer && m_updateTimer->isActive()) m_updateTimer->stop();
@@ -431,4 +487,80 @@ void LiveTranslator::stopCapture()
     if (m_captureOverlay) m_captureOverlay->hide();
 
     stopOcrWorkers();
+}
+
+bool LiveTranslator::eventFilter(QObject* obj, QEvent* event)
+{
+    // Handle source search edit and combobox
+    if (obj == ui.sourceSearchEdit)
+    {
+        if (event->type() == QEvent::FocusOut)
+        {
+            if (ui.sourceLanguageComboBox->view()->isVisible())
+            {
+                return true; // Prevent focus out
+            }
+        }
+        else if (event->type() == QEvent::KeyPress)
+        {
+            QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+            if (keyEvent->key() == Qt::Key_Escape)
+            {
+                if (ui.sourceLanguageComboBox->view()->isVisible())
+                {
+                    ui.sourceLanguageComboBox->hidePopup();
+                    return true;
+                }
+            }
+        }
+    }
+    // Handle target search edit and combobox
+    else if (obj == ui.targetSearchEdit)
+    {
+        if (event->type() == QEvent::FocusOut)
+        {
+            if (ui.targetLanguageComboBox->view()->isVisible())
+            {
+                return true; // Prevent focus out
+            }
+        }
+        else if (event->type() == QEvent::KeyPress)
+        {
+            QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+            if (keyEvent->key() == Qt::Key_Escape)
+            {
+                if (ui.targetLanguageComboBox->view()->isVisible())
+                {
+                    ui.targetLanguageComboBox->hidePopup();
+                    return true;
+                }
+            }
+        }
+    }
+    // Handle events in combo box views
+    else if (obj == ui.sourceLanguageComboBox->view() || obj == ui.targetLanguageComboBox->view())
+    {
+        qDebug() << "TEST 1111111111111111";
+        if (event->type() == QEvent::KeyPress)
+        {
+            qDebug() << "TEST 222222222222222";
+            QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+            QLineEdit* targetEdit = (obj == ui.sourceLanguageComboBox->view()) ? ui.sourceSearchEdit : ui.targetSearchEdit;
+            QComboBox* targetCombo = (obj == ui.sourceLanguageComboBox->view()) ? ui.sourceLanguageComboBox : ui.targetLanguageComboBox;
+
+            targetEdit->setFocus();
+
+            QCoreApplication::sendEvent(targetEdit, static_cast<QKeyEvent*>(keyEvent));
+            qDebug() << "Key forwarded to" << targetEdit << "Key:" << keyEvent->text();
+
+            if (keyEvent->key() == Qt::Key_Escape)
+            {
+                targetCombo->hidePopup();
+                return true;
+            }
+            return true;
+        }
+    }
+
+    return QMainWindow::eventFilter(obj, event);
 }

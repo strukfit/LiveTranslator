@@ -29,6 +29,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
 private slots:
     void startCapture();
@@ -51,6 +52,7 @@ private:
     void setupTrayMenu();
     void setupTranslatorComboBox();
     void stopOcrWorkers();
+    void swapLanguagesIfNeeded();
 
     Ui::LiveTranslatorClass ui;
     QTimer* m_updateTimer;
@@ -72,4 +74,7 @@ private:
 
     QList<QPair<QThread*, OcrWorker*>> m_ocrTasks;
     QCache<QString, QString> m_translationCache;
+
+    QString m_lastSourceText;
+    QString m_lastTargetText;
 };
