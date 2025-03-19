@@ -349,7 +349,6 @@ void LiveTranslator::updateTranslator(int index)
     }
 
     TranslationApi::Type type = static_cast<TranslationApi::Type>(ui.translatorComboBox->itemData(index).toInt());
-    qDebug() << m_settings->getApiKey(type);
     m_translator = TranslatorFactory::createTranslator(type, this, m_settings->getApiKey(type));
 
     m_settings->setTranslatorType(type);

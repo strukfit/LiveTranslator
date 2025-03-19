@@ -1,5 +1,6 @@
 #include "translators/TranslatorFactory.h"
 #include "translators/GoogleTranslator.h"
+#include "translators/LibreTranslator.h"
 
 Translator* TranslatorFactory::createTranslator(TranslationApi::Type type, QObject* parent, const QString& apiKey)
 {
@@ -10,7 +11,7 @@ Translator* TranslatorFactory::createTranslator(TranslationApi::Type type, QObje
 	case TranslationApi::Type::DeepLTranslate:
 		return nullptr;
 	case TranslationApi::Type::LibreTranslate:
-		return nullptr;
+		return new LibreTranslator("libretranslate_server", "http://localhost:5000", parent);;
 	default:
 		return nullptr;
 	}

@@ -7,7 +7,7 @@
 #define ENUM_API_TYPES \
     ENUM_VALUE(GoogleTranslate, "Google Translate", "google") \
     ENUM_VALUE(DeepLTranslate, "DeepL Translate", "deepl") \
-    ENUM_VALUE(LibreTranslate, "Libre Translate", "libretranslate")
+    ENUM_VALUE(LibreTranslate, "Libre Translate (Local)", "libretranslate")
 
 #define ENUM_VALUE(name, string, service) name,
 
