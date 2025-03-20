@@ -19,15 +19,24 @@ public:
 
     void translate(const QString& text, const QString& sourceLang, const QString& targetLang) override;
 
+signals:
+    void serverReady();
+    void statusUpdated(const QString& status);
+    void progressUpdated(int value, int maximum);
+    void initializationStepFinished();
+
+private slots:
+    void checkServerReady();
+    void onInitializationStepFinished();
+
 private:
-    void ensureLanguageSupport(const QString& sourceLang, const QString& targetLang);
-    bool startServer(const QStringList& languages);
+    void ensureLanguageSupport(const QString& sourceLang, const QString& targetLang, bool isRestartNeeded = false);
+    void startServer(const QStringList& languages);
     bool checkServerExists();
     bool isServerRunning();
-    bool installServer();
-    bool createVirtualEnv();
+    void installServer();
+    void createVirtualEnv();
     void loadExistingLanguageModels();
-    void waitForServerReady();
 
     QString m_serverPath;
     QString m_venvPath;

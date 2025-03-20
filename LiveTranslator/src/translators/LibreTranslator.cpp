@@ -23,20 +23,56 @@ LibreTranslator::LibreTranslator(const QString& serverPath, const QString& host,
 	m_serverReady(false)
 {
 	QDir serverDir(m_serverPath);
-	if (!serverDir.exists()) 
-	{
-		serverDir.mkpath(".");
-	}
+	if (!serverDir.exists()) serverDir.mkpath(".");
+	QDir modelsDir(m_modelsPath);
+	if (!modelsDir.exists()) modelsDir.mkpath(".");
 
-	if (!checkServerExists() || !QDir(m_venvPath).exists())
+	m_installDialog = new QProgressDialog("Installation", "Cancel", 0, 0, qobject_cast<QWidget*>(this));
+	m_installDialog->setWindowModality(Qt::WindowModal);
+	m_installDialog->setAutoClose(true);
+
+	connect(this, &LibreTranslator::statusUpdated, m_installDialog, &QProgressDialog::setLabelText);
+	connect(m_installDialog, &QProgressDialog::canceled, this, [=]() {
+		m_installProcess->terminate();
+		if (!m_installProcess->waitForFinished(3000)) {
+			m_installProcess->kill();
+		}
+	});
+
+	connect(m_libreProcess, &QProcess::readyReadStandardOutput, this, [=] {
+		QString output = QString::fromUtf8(m_libreProcess->readAllStandardOutput());
+		qDebug().noquote() << "LibreTranslate output:" << output;
+		emit statusUpdated(output);
+	});
+
+	connect(m_libreProcess, &QProcess::readyReadStandardError, this, [=]() {
+		QString error = QString::fromUtf8(m_libreProcess->readAllStandardError());
+		qDebug().noquote() << "LibreTranslate error:" << error;
+		emit statusUpdated("Error: " + error);
+	});
+
+	connect(m_installProcess, &QProcess::readyReadStandardOutput, this, [=]() {
+		QString output = QString::fromUtf8(m_installProcess->readAllStandardOutput());
+		qDebug().noquote() << "Install output:" << output;
+		emit statusUpdated(output);
+	});
+
+	connect(m_installProcess, &QProcess::readyReadStandardError, this, [=]() {
+		QString error = QString::fromUtf8(m_installProcess->readAllStandardError());
+		qDebug().noquote() << "Install error:" << error;
+		emit statusUpdated("Error: " + error);
+	});
+
+	connect(this, &LibreTranslator::initializationStepFinished, this, &LibreTranslator::onInitializationStepFinished);
+
+	if (!QDir(m_venvPath).exists())
 	{
 		createVirtualEnv();
-		installServer();
 	}
-
-	loadExistingLanguageModels();
-	ensureLanguageSupport("en", "ru");
-	startServer(m_loadedLanguages);
+	else
+	{
+		emit initializationStepFinished();
+	}
 }
 
 LibreTranslator::~LibreTranslator()
@@ -47,25 +83,30 @@ LibreTranslator::~LibreTranslator()
 		if (!m_libreProcess->waitForFinished(3000)) 
 		{
 			m_libreProcess->kill();
-			qDebug() << "LibreTranslate process killed";
+			emit statusUpdated("LibreTranslate process killed");
 		}
 		else 
 		{
-			qDebug() << "LibreTranslate process terminated gracefully";
+			emit statusUpdated("LibreTranslate process terminated gracefully");
 		}
 	}
+	m_installDialog->deleteLater();
 }
 
 void LibreTranslator::translate(const QString& text, const QString& sourceLang, const QString& targetLang)
 {
 	if (sourceLang == targetLang) return;
 
-	ensureLanguageSupport(sourceLang, targetLang);
+	ensureLanguageSupport(sourceLang, targetLang, true);
 
 	if (!m_serverReady)
 	{
-		qDebug() << "Server not ready, waiting...";
-		waitForServerReady();
+		emit statusUpdated("Server not ready, waiting...");
+		QTimer::singleShot(0, this, &LibreTranslator::checkServerReady);
+		connect(this, &LibreTranslator::serverReady, this, [=]() {
+			translate(text, sourceLang, targetLang);
+		}, Qt::UniqueConnection);
+		return;
 	}
 
 	QUrl url(m_host + "/translate");
@@ -101,14 +142,46 @@ void LibreTranslator::translate(const QString& text, const QString& sourceLang, 
 	});
 }
 
-void LibreTranslator::ensureLanguageSupport(const QString& sourceLang, const QString& targetLang)
+void LibreTranslator::onInitializationStepFinished()
 {
-	bool needsRestart = false;
+	static int step = 0;
+	switch (step)
+	{
+	case 0:
+		step++;
+		if (!checkServerExists())
+		{
+			installServer();
+		}
+		else
+		{
+			emit initializationStepFinished();
+		}
+		break;
+	case 1:
+		loadExistingLanguageModels();
+		step++;
+		emit initializationStepFinished();
+		break;
+	case 2:
+		ensureLanguageSupport("en", "ru");
+		step++;
+		emit initializationStepFinished();
+		break;
+	case 3:
+		startServer(m_loadedLanguages);
+		step = 0;
+		break;
+	default: 
+		break;
+	}
+}
 
+void LibreTranslator::ensureLanguageSupport(const QString& sourceLang, const QString& targetLang, bool isRestartNeeded)
+{
 	if (!m_loadedLanguages.contains(sourceLang) || !m_loadedLanguages.contains(targetLang))
 	{
 		qDebug() << "Installing package for" << sourceLang << "->" << targetLang;
-		QProcess* modelProcess = new QProcess(this);
 		QString pythonPath = m_venvPath + "/Scripts/python";
 		QString scriptPath = m_serverPath + "/install_model.py";
 		QStringList arguments;
@@ -117,48 +190,28 @@ void LibreTranslator::ensureLanguageSupport(const QString& sourceLang, const QSt
 		QStringList env = QProcessEnvironment::systemEnvironment().toStringList();
 		env << QString("ARGOS_TRANSLATE_DIR=%1").arg(m_modelsPath);
 		env << QString("PYTHONPATH=%1").arg(m_serverPath);
-		modelProcess->setEnvironment(env);
-		modelProcess->setWorkingDirectory(m_serverPath);
+		m_installProcess->setEnvironment(env);
+		m_installProcess->setWorkingDirectory(m_serverPath);
 
-		connect(modelProcess, &QProcess::readyReadStandardOutput, this, [=]() {
-			qDebug().noquote() << modelProcess->readAllStandardOutput().trimmed();
-		});
-
-		connect(modelProcess, &QProcess::readyReadStandardError, this, [=]() {
-			qDebug().noquote() << "Error:" << modelProcess->readAllStandardError().trimmed();
-		});
-
-		modelProcess->start(pythonPath, arguments);
-
-		connect(modelProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [=](int exitCode, QProcess::ExitStatus exitStatus) {
+		connect(m_installProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [=](int exitCode, QProcess::ExitStatus exitStatus) {
 			if (exitStatus == QProcess::NormalExit && exitCode == 0) {
-				qDebug() << "Package" << sourceLang << "->" << targetLang << "installed successfully";
-
-				if (!m_loadedLanguages.contains(sourceLang)) {
-					m_loadedLanguages << sourceLang;
-				}
-
-				if (!m_loadedLanguages.contains(targetLang)) {
-					m_loadedLanguages << targetLang;
+				emit statusUpdated("Package " + sourceLang + " -> " + targetLang + " installed successfully");
+				if (isRestartNeeded)
+				{
+					loadExistingLanguageModels();
+					startServer(m_loadedLanguages);
 				}
 			}
 			else {
-				qDebug() << "Failed to install package" << sourceLang << "->" << targetLang << ":" << modelProcess->readAllStandardError();
-				emit translationError("Failed to install package for " + sourceLang + " -> " + targetLang);
+				emit statusUpdated("Failed to install package " + sourceLang + " -> " + targetLang + ": " + QString::fromUtf8(m_installProcess->readAllStandardError()));
 			}
-			modelProcess->deleteLater();
 		});
 
-		modelProcess->waitForFinished(-1);
-		needsRestart = true;
-	}
-
-	if (needsRestart) {
-		startServer(m_loadedLanguages);
+		m_installProcess->start(pythonPath, arguments);
 	}
 }
 
-bool LibreTranslator::startServer(const QStringList& languages)
+void LibreTranslator::startServer(const QStringList& languages)
 {
 	if (m_libreProcess->state() == QProcess::Running) {
 		m_libreProcess->terminate();
@@ -170,11 +223,6 @@ bool LibreTranslator::startServer(const QStringList& languages)
 	QStringList arguments;
 	arguments << mainPyPath << "--load-only" << languages.join(",");
 
-	if (languages.isEmpty())
-	{
-		qDebug() << "No languages loaded";
-	}
-
 	m_libreProcess->setWorkingDirectory(m_serverPath);
 	QStringList env = QProcessEnvironment::systemEnvironment().toStringList();
 	env << QString("ARGOS_TRANSLATE_DIR=%1").arg(m_modelsPath);
@@ -184,23 +232,15 @@ bool LibreTranslator::startServer(const QStringList& languages)
 
 	m_serverReady = false;
 	m_libreProcess->start(pythonPath, arguments);
-	if (!m_libreProcess->waitForStarted(5000)) {
-		qDebug() << "Failed to start LibreTranslate:" << m_libreProcess->errorString();
-		return false;
-	}
 
-	qDebug() << "LibreTranslate server started from:" << m_serverPath;
-
-	connect(m_libreProcess, &QProcess::readyReadStandardOutput, this, [=]() {
-		qDebug() << "LibreTranslate output:" << m_libreProcess->readAllStandardOutput();
+	connect(m_libreProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [=](int exitCode, QProcess::ExitStatus exitStatus) {
+		if (exitCode != 0 || exitStatus != QProcess::NormalExit) {
+			emit statusUpdated("Server stopped unexpectedly with exit code: " + QString::number(exitCode));
+			m_serverReady = false;
+		}
 	});
 
-	connect(m_libreProcess, &QProcess::readyReadStandardError, this, [=]() {
-		qDebug() << "LibreTranslate error:" << m_libreProcess->readAllStandardError();
-	});
-
-	qDebug() << "Libretranslate server started succesfully.";
-	return true;
+	QTimer::singleShot(0, this, &LibreTranslator::checkServerReady);
 }
 
 bool LibreTranslator::checkServerExists()
@@ -209,17 +249,56 @@ bool LibreTranslator::checkServerExists()
 	return venvDir.exists("python.exe") && QFile::exists(m_venvPath + "/Lib/site-packages/libretranslate/__init__.py");
 }
 
+void LibreTranslator::checkServerReady()
+{
+	static int attempts = 0;
+	const int maxAttempts = 10;
+
+	QUrl url(QUrl(m_host + "/languages"));
+	QNetworkReply* reply = RESTApiHandler::instance()->get(url);
+
+	connect(reply, &QNetworkReply::finished, this, [&maxAttempts, reply, this]() {
+		if (reply->error() == QNetworkReply::NoError) {
+			m_serverReady = true;
+			attempts = 0;
+			emit statusUpdated("Server is ready at: " + m_host);
+			emit serverReady();
+		}
+		else 
+		{
+			attempts++;
+			if (attempts >= maxAttempts)
+			{
+				attempts = 0;
+				m_serverReady = false;
+
+				QString errorDetails = m_libreProcess->readAllStandardError();
+
+				if (!errorDetails.isEmpty()) {
+					emit statusUpdated("Server failed to start: " + errorDetails);
+					return;
+				}
+
+				emit statusUpdated("Server failed to start after " + QString::number(maxAttempts) + " attempts.");
+				return;
+			}
+
+			emit statusUpdated("Waiting for server... (Attempt " + QString::number(attempts) + " of " + QString::number(maxAttempts) + ")");
+			QTimer::singleShot(500, this, &LibreTranslator::checkServerReady);
+		}
+		reply->deleteLater();
+	});
+}
+
 bool LibreTranslator::isServerRunning()
 {
 	return m_libreProcess && m_libreProcess->state() == QProcess::Running;
 }
 
-bool LibreTranslator::installServer()
+void LibreTranslator::installServer()
 {
-	m_installDialog = new QProgressDialog("Installing LibreTranslate server...", "Cancel", 0, 0, qobject_cast<QWidget*>(parent()));
-	m_installDialog->setWindowModality(Qt::WindowModal);
-	m_installDialog->setAutoClose(true);
 	m_installDialog->show();
+	emit statusUpdated("Installing LibreTranslate server...");
 
 	// Activate venv and install libretranslate
 	QString pythonPath = m_venvPath + "/Scripts/python";
@@ -227,79 +306,46 @@ bool LibreTranslator::installServer()
 	arguments << "-m" << "pip" << "install" << "libretranslate";
 
 	m_installProcess->setWorkingDirectory(m_serverPath);
-	m_installProcess->start(pythonPath, arguments);
 
-	bool success = false;
-	connect(m_installProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [&success, this](int exitCode, QProcess::ExitStatus exitStatus) {
+	connect(m_installProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this](int exitCode, QProcess::ExitStatus exitStatus) {
 		if (exitStatus == QProcess::NormalExit && exitCode == 0) {
-			qDebug() << "LibreTranslate installed successfully in venv";
-			success = true;
+			emit statusUpdated("LibreTranslate installed successfully in venv");
 			m_installDialog->accept();
+			emit initializationStepFinished();
 		}
 		else {
-			qDebug() << "Installation failed:" << m_installProcess->readAllStandardError();
-			emit translationError("Failed to install LibreTranslate");
+			emit statusUpdated("Installation failed: " + QString::fromUtf8(m_installProcess->readAllStandardError()));
 			m_installDialog->reject();
 		}
-		});
-
-	connect(m_installProcess, &QProcess::readyReadStandardOutput, this, [=]() {
-		qDebug() << "Install output:" << m_installProcess->readAllStandardOutput();
 	});
 
-	connect(m_installProcess, &QProcess::readyReadStandardError, this, [=]() {
-		qDebug() << "Install error:" << m_installProcess->readAllStandardError();
-	});
-
-	connect(m_installDialog, &QProgressDialog::canceled, this, [=]() {
-		m_installProcess->terminate();
-		if (!m_installProcess->waitForFinished(3000)) {
-			m_installProcess->kill();
-		}
-		emit translationError("LibreTranslate installation canceled");
-	});
-
-	m_installProcess->waitForFinished(-1);
-	return success;
+	m_installProcess->start(pythonPath, arguments);
 }
 
-bool LibreTranslator::createVirtualEnv()
+void LibreTranslator::createVirtualEnv()
 {
-	m_installDialog = new QProgressDialog("Creating virtual environment...", "Cancel", 0, 0, qobject_cast<QWidget*>(parent()));
-	m_installDialog->setWindowModality(Qt::WindowModal);
-	m_installDialog->setAutoClose(true);
 	m_installDialog->show();
 
 	QStringList arguments;
-	arguments << "-m" << "venv" << m_venvPath;
+	arguments << "-3.11" << "-m" << "venv" << m_venvPath;
 
 	m_installProcess->setWorkingDirectory(m_serverPath);
-	m_installProcess->start("python", arguments);
+	m_installProcess->setEnvironment({ QString("PYTHONIOENCODING=utf-8") });
 
-	bool success = false;
-	connect(m_installProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [&success, this](int exitCode, QProcess::ExitStatus exitStatus) {
+	connect(m_installProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this](int exitCode, QProcess::ExitStatus exitStatus) {
 		if (exitStatus == QProcess::NormalExit && exitCode == 0) {
-			qDebug() << "Virtual environment created at:" << m_venvPath;
-			success = true;
+			emit statusUpdated("Virtual environment created at: " + m_venvPath);
 			m_installDialog->accept();
+			emit initializationStepFinished();
 		}
 		else {
-			qDebug() << "Failed to create virtual environment:" << m_installProcess->readAllStandardError();
-			emit translationError("Failed to create virtual environment");
+			emit statusUpdated("Failed to create virtual environment: " + QString::fromUtf8(m_installProcess->readAllStandardError()));
 			m_installDialog->reject();
 		}
 	});
 
-	connect(m_installDialog, &QProgressDialog::canceled, this, [=]() {
-		m_installProcess->terminate();
-		if (!m_installProcess->waitForFinished(3000)) {
-			m_installProcess->kill();
-		}
-		emit translationError("Virtual environment creation canceled");
-	});
-
-	m_installProcess->waitForFinished(-1);
-	return success;
+	emit statusUpdated("Creating virtual environment...");
+	m_installProcess->start("py", arguments);
 }
 
 void LibreTranslator::loadExistingLanguageModels()
@@ -308,6 +354,7 @@ void LibreTranslator::loadExistingLanguageModels()
 	QStringList filters;
 	filters << "*.argosmodel";
 	QStringList modelFiles = dir.entryList(filters, QDir::Files);
+	m_loadedLanguages.clear();
 	for (const QString& file : modelFiles) {
 		QStringList parts = file.split('-')[1].split('_');
 		if (parts.size() >= 2) {
@@ -322,39 +369,4 @@ void LibreTranslator::loadExistingLanguageModels()
 		}
 	}
 	qDebug() << "Loaded languages from existing models:" << m_loadedLanguages;
-}
-
-void LibreTranslator::waitForServerReady()
-{
-	QTimer timer(this);
-	timer.setInterval(500);
-	timer.setSingleShot(false);
-
-	int attempts = 0;
-	const int maxAttempts = 20;
-
-	connect(&timer, &QTimer::timeout, this, [&timer, &attempts, maxAttempts, this]() mutable {
-		QUrl url(QUrl(m_host + "/languages"));
-		QNetworkReply* reply = RESTApiHandler::instance()->get(url);
-
-		connect(reply, &QNetworkReply::finished, this, [reply, &timer, &attempts, maxAttempts, this]() {
-			if (reply->error() == QNetworkReply::NoError) {
-				qDebug() << "Server is ready at:" << m_host;
-				m_serverReady = true;
-				timer.stop();
-				reply->deleteLater();
-			}
-			else {
-				attempts++;
-				qDebug() << "Waiting for server... Attempt" << attempts << "of" << maxAttempts;
-				if (attempts >= maxAttempts) {
-					qDebug() << "Server failed to start within timeout";
-					timer.stop();
-					emit translationError("Server failed to start within timeout");
-					reply->deleteLater();
-				}
-			}
-			reply->deleteLater();
-		});
-	});
 }
