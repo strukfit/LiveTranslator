@@ -14,7 +14,7 @@ public:
 
 private:
     QString m_apiKey;
-    RESTApiHandler* m_apiHandler;
+    const QString m_apiEndpoint = "https://translation.googleapis.com/language/translate/v2";
 };
 
 #endif // GOOGLETRANSLATOR_H

@@ -257,7 +257,7 @@ void LibreTranslator::checkServerReady()
 	QUrl url(QUrl(m_host + "/languages"));
 	QNetworkReply* reply = RESTApiHandler::instance()->get(url);
 
-	connect(reply, &QNetworkReply::finished, this, [&maxAttempts, reply, this]() {
+	connect(reply, &QNetworkReply::finished, this, [maxAttempts, reply, this]() {
 		if (reply->error() == QNetworkReply::NoError) {
 			m_serverReady = true;
 			attempts = 0;
